@@ -84,6 +84,7 @@ I18N = {
         "days_unit": " 天",
         "chart_header": "📈 歷史走勢圖表（點擊切換日線 / 三指標週線）",
         "chart_modes": ["日線：CNN 恐慌指數 & VIX（每日）", "週線：CNN 恐慌 & VIX & AAII 看空比例（每週同框）"],
+        "weekly_caption": "週線三指標對照說明：CNN Fear & Greed（0–100 綜合情緒）、CBOE VIX（隱含波動率）、AAII_Bearish（每週散戶看空比例 %）。",
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -145,6 +146,7 @@ I18N = {
         "days_unit": " days",
         "chart_header": "📈 Historical Trend Chart (Switch Daily / 3-Indicator Weekly)",
         "chart_modes": ["Daily: CNN Fear & Greed & VIX", "Weekly: CNN & VIX & AAII Bearish (%) Combined"],
+        "weekly_caption": "Weekly 3-indicator overlay: CNN Fear & Greed (0–100 composite sentiment), CBOE VIX (implied volatility), and AAII_Bearish (weekly retail bearish %).",
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -206,6 +208,7 @@ I18N = {
         "days_unit": " 日",
         "chart_header": "📈 過去の推移チャート（日足 / 3指標週足 切替）",
         "chart_modes": ["日足：CNN恐怖指数 & VIX（日次）", "週足：CNN & VIX & AAII 弱気比率（週次3指標同時表示）"],
+        "weekly_caption": "週足3指標表示：CNN Fear & Greed（0〜100 総合センチメント）、CBOE VIX（インプライド・ボラティリティ）、AAII_Bearish（週次個人投資家弱気比率 %）。",
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -280,6 +283,7 @@ THEME_PALETTES = [
         "lab_border": "#4338CA",
         "lab_badge_bg": "#4338CA",
         "lab_badge_fg": "#FFFFFF",
+        "time_highlight": "#3730A3",
         "info_bg": "#F8FAFC",
     },
     {
@@ -292,6 +296,7 @@ THEME_PALETTES = [
         "lab_border": "#0369A1",
         "lab_badge_bg": "#0369A1",
         "lab_badge_fg": "#FFFFFF",
+        "time_highlight": "#075985",
         "info_bg": "#F8FAFC",
     },
     {
@@ -304,6 +309,7 @@ THEME_PALETTES = [
         "lab_border": "#818CF8",
         "lab_badge_bg": "#6366F1",
         "lab_badge_fg": "#FFFFFF",
+        "time_highlight": "#A5B4FC",
         "info_bg": "#172554",
     },
 ]
@@ -317,9 +323,25 @@ css_block = (
     ".badge-green { background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-yellow { background-color: #FEF9C3; color: #854D0E; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-red { background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
-    ".lab-badge { display: inline-block; background-color: " + style["lab_badge_bg"] + "; color: " + style["lab_badge_fg"] + "; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; letter-spacing: 0.4px; margin-bottom: 8px; }"
-    ".lab-block { background-color: " + style["lab_bg"] + "; color: " + style["lab_text"] + "; border: 2px solid " + style["lab_border"] + "; border-top: 8px solid " + style["lab_border"] + "; border-radius: 18px; padding: 20px 20px 8px 20px; margin: 12px 0 18px 0; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }"
-    ".lab-block [data-testid='stAlert'] { background-color: " + style["info_bg"] + "; color: " + style["lab_text"] + "; border: 1px solid " + style["lab_border"] + "; }"
+    ".lab-badge-wrap { text-align: center; margin-bottom: 8px; }"
+    ".lab-badge { display: inline-block; background-color: " + style["lab_badge_bg"] + "; color: " + style["lab_badge_fg"] + "; padding: 6px 16px; border-radius: 999px; font-weight: 800; font-size: " + str(font_size + 1) + "px; letter-spacing: 0.4px; }"
+    ".lab-hero-center { text-align: center; font-size: " + str(font_size + 2) + "px; font-weight: 800; color: " + style["lab_text"] + "; margin: 6px 0 8px 0; }"
+    ".sec-big { font-size: " + str(font_size + 3) + "px; font-weight: 800; color: " + style["time_highlight"] + "; }"
+    "div[data-testid='stVerticalBlockBorderWrapper']:has(#survey-lab-marker) {"
+    "  background-color: " + style["lab_bg"] + " !important;"
+    "  color: " + style["lab_text"] + " !important;"
+    "  border: 2.5px solid " + style["lab_border"] + " !important;"
+    "  border-top: 8px solid " + style["lab_border"] + " !important;"
+    "  border-radius: 18px !important;"
+    "  padding: 20px 18px !important;"
+    "  margin: 22px 0 26px 0 !important;"
+    "  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10) !important;"
+    "}"
+    "div[data-testid='stVerticalBlockBorderWrapper']:has(#survey-lab-marker) [data-testid='stAlert'] {"
+    "  background-color: " + style["info_bg"] + " !important;"
+    "  color: " + style["lab_text"] + " !important;"
+    "  border: 1px solid " + style["lab_border"] + " !important;"
+    "}"
     "</style>"
 )
 st.markdown(css_block, unsafe_allow_html=True)
@@ -436,12 +458,13 @@ with tab_dash:
         )
         st.markdown(c3_html, unsafe_allow_html=True)
 
-    # ================= 獨立完整色塊投票區：互惠感謝引導 ＋ 雙題 5 點量表 ＋ 可愛動物致謝 =================
+    # ================= 整塊獨立色塊投票區：置中 10 秒提示 ＋ 互惠引導 ＋ 雙題 5 點量表 ＋ 可愛動物致謝 =================
     survey_texts = {
         "zh-TW": {
-            "badge": "🧪 行為實驗互動區 · 約 10 秒",
+            "badge": "🧪 行為實驗互動區 · 只要 10 秒",
             "title": "🗳️ 順手幫個忙：記錄您此刻的市場直覺（5 點量表）",
-            "prompt_lead": "看完今日指標了嗎？如果這些數據對您有幫助，歡迎花 10 秒順手留下一筆匿名研究紀錄！",
+            "center_10s": "⏱️ 只要 <span class='sec-big'>10 秒</span>，順手留下一筆匿名研究紀錄！",
+            "prompt_lead": "看完今日指標了嗎？如果這些數據對您有幫助，歡迎花 <span class='sec-big'>10 秒</span> 幫個忙填一下。",
             "invite": "💡 **您的真實反應對學術研究非常寶貴**——我們正在收集投資人看到恐慌指標與勝率後的第一直覺，完全自由參與、無需登入。",
             "pre_ethics": (
                 "**研究倫理聲明（送出前請閱覽）**：本匿名調查探討檢視美股恐慌指標與歷史勝率後之「反身性」行為反應。"
@@ -476,9 +499,10 @@ with tab_dash:
             "thank_sub": "您的匿名作答已記錄（採盲測設計，不公開即時統計；僅供學術探討，非投資建議）。",
         },
         "en": {
-            "badge": "🧪 BEHAVIORAL LAB · 10-SEC EXPERIMENT",
+            "badge": "🧪 BEHAVIORAL LAB · ONLY 10 SECONDS",
             "title": "🗳️ Quick Favor: Record Your Market Intuition (5-Point Scale)",
-            "prompt_lead": "Found today's indicators helpful? Spend 10 seconds contributing an anonymous data point to our research!",
+            "center_10s": "⏱️ Takes just <span class='sec-big'>10 seconds</span> to help our research!",
+            "prompt_lead": "Found today's indicators helpful? Spend <span class='sec-big'>10 seconds</span> contributing an anonymous data point!",
             "invite": "💡 **Your genuine reaction is invaluable for academic research.** We study investors' immediate intuition after viewing sentiment and win-rate data—voluntary and no login required.",
             "pre_ethics": (
                 "**Research Ethics Notice (Please Read Before Submitting)**: This anonymous survey examines investor reflexivity after viewing sentiment indicators and win rates. "
@@ -513,9 +537,10 @@ with tab_dash:
             "thank_sub": "Your anonymous response has been recorded (blinded design, no live tallies; academic research only, not financial advice).",
         },
         "ja": {
-            "badge": "🧪 行動実験エリア · 所要時間 約10秒",
+            "badge": "🧪 行動実験エリア · たった 10 秒",
             "title": "🗳️ 研究へのご協力：現在の直感をお聞かせください（5段階尺度）",
-            "prompt_lead": "本日の指標はお役に立ちましたか？10秒だけお時間をいただき、匿名データの記録にご協力ください！",
+            "center_10s": "⏱️ たった <span class='sec-big'>10 秒</span> で研究にご協力いただけます！",
+            "prompt_lead": "本日の指標はお役に立ちましたか？<span class='sec-big'>10 秒</span> だけお時間をいただき、匿名データの記録にご協力ください！",
             "invite": "💡 **あなたの素直な反応が学術研究の貴重なデータになります。** 恐怖指数と実証勝率を見た直後の心理を調査しています（任意参加・ログイン不要）。",
             "pre_ethics": (
                 "**研究倫理声明（送信前にお読みください）**：本匿名調査は恐怖指数と実証勝率を閲覧した後の投資家の再帰性（リフレクシビティ）を検証します。"
@@ -553,89 +578,102 @@ with tab_dash:
 
     if "voted_in_session" not in st.session_state:
         st.session_state["voted_in_session"] = False
+    if "submitting_lock" not in st.session_state:
+        st.session_state["submitting_lock"] = False
     if "thank_animal" not in st.session_state:
         st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
 
-    st.markdown("<div class='lab-block'>", unsafe_allow_html=True)
-    st.markdown("<span class='lab-badge'>" + survey_texts["badge"] + "</span>", unsafe_allow_html=True)
-    st.subheader(survey_texts["title"])
-    st.markdown("**" + survey_texts["prompt_lead"] + "**")
-    st.markdown(survey_texts["invite"])
-    st.info(survey_texts["pre_ethics"])
-    with st.expander(survey_texts["expander_label"], expanded=False):
-        st.markdown(survey_texts["ethics_detail"])
-
-    if not st.session_state["voted_in_session"]:
-        emo_score = st.radio(
-            survey_texts["q1_label"],
-            options=[1, 2, 3, 4, 5],
-            index=None,
-            format_func=lambda x: survey_texts["q1_opts"][x],
+    with st.container(border=True):
+        st.markdown("<span id='survey-lab-marker' style='display:none;'></span>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='lab-badge-wrap'><span class='lab-badge'>" + survey_texts["badge"] + "</span></div>"
+            "<div class='lab-hero-center'>" + survey_texts["center_10s"] + "</div>",
+            unsafe_allow_html=True,
         )
-        act_score = st.radio(
-            survey_texts["q2_label"],
-            options=[1, 2, 3, 4, 5],
-            index=None,
-            format_func=lambda x: survey_texts["q2_opts"][x],
-        )
+        st.subheader(survey_texts["title"])
+        st.markdown("<div style='text-align:center;'>" + survey_texts["prompt_lead"] + "</div>", unsafe_allow_html=True)
+        st.write("")
+        st.markdown(survey_texts["invite"])
+        st.info(survey_texts["pre_ethics"])
+        with st.expander(survey_texts["expander_label"], expanded=False):
+            st.markdown(survey_texts["ethics_detail"])
 
-        agreed = st.checkbox(survey_texts["consent_chk"], value=False)
-        can_submit = (emo_score is not None) and (act_score is not None) and bool(agreed)
-
-        if not can_submit:
-            st.caption(survey_texts["unlock_hint"])
-
-        if st.button(
-            survey_texts["submit"],
-            disabled=not can_submit,
-            type="primary",
-            use_container_width=True,
-        ):
-            emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
-            act_payload = (
-                str(act_score)
-                + " | 126D_Win:"
-                + str(win_rates["126D"]["final_win_rate"])
-                + "% | "
-                + survey_texts["q2_opts"][act_score]
+        if not st.session_state["voted_in_session"]:
+            emo_score = st.radio(
+                survey_texts["q1_label"],
+                options=[1, 2, 3, 4, 5],
+                index=None,
+                format_func=lambda x: survey_texts["q1_opts"][x],
             )
-            form_data = {
-                ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
-                ENTRY_LANG: str(selected_lang),
-                ENTRY_CNN: str(cnn["score"]),
-                ENTRY_VIX: str(vix["vix"]),
-                ENTRY_AAII: str(aaii["bearish"]),
-                ENTRY_EMOTION: emo_payload,
-                ENTRY_ACTION: act_payload,
-            }
-            try:
-                req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=10)
-            except Exception:
-                pass
-            st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
-            st.session_state["voted_in_session"] = True
-            st.rerun()
-    else:
-        icon_ch, name_zh, name_en, name_ja = st.session_state["thank_animal"]
-        if selected_lang == "zh-TW":
-            animal_label = name_zh
-        elif selected_lang == "en":
-            animal_label = name_en
+            act_score = st.radio(
+                survey_texts["q2_label"],
+                options=[1, 2, 3, 4, 5],
+                index=None,
+                format_func=lambda x: survey_texts["q2_opts"][x],
+            )
+
+            agreed = st.checkbox(survey_texts["consent_chk"], value=False)
+            can_submit = (
+                (emo_score is not None)
+                and (act_score is not None)
+                and bool(agreed)
+                and (not st.session_state["submitting_lock"])
+            )
+
+            if not can_submit:
+                st.caption(survey_texts["unlock_hint"])
+
+            if st.button(
+                survey_texts["submit"],
+                disabled=not can_submit,
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state["submitting_lock"] = True
+                emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
+                act_payload = (
+                    str(act_score)
+                    + " | 126D_Win:"
+                    + str(win_rates["126D"]["final_win_rate"])
+                    + "% | "
+                    + survey_texts["q2_opts"][act_score]
+                )
+                form_data = {
+                    ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
+                    ENTRY_LANG: str(selected_lang),
+                    ENTRY_CNN: str(cnn["score"]),
+                    ENTRY_VIX: str(vix["vix"]),
+                    ENTRY_AAII: str(aaii["bearish"]),
+                    ENTRY_EMOTION: emo_payload,
+                    ENTRY_ACTION: act_payload,
+                }
+                try:
+                    req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=10)
+                except Exception:
+                    pass
+                st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
+                st.session_state["voted_in_session"] = True
+                st.session_state["submitting_lock"] = False
+                st.rerun()
         else:
-            animal_label = name_ja
+            icon_ch, name_zh, name_en, name_ja = st.session_state["thank_animal"]
+            if selected_lang == "zh-TW":
+                animal_label = name_zh
+            elif selected_lang == "en":
+                animal_label = name_en
+            else:
+                animal_label = name_ja
 
-        st.success(
-            icon_ch
-            + " **"
-            + animal_label
-            + "**："
-            + survey_texts["thank_line"]
-            + "\n\n"
-            + survey_texts["thank_sub"]
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
+            st.success(
+                icon_ch
+                + " **"
+                + animal_label
+                + "**："
+                + survey_texts["thank_line"]
+                + "\n\n"
+                + survey_texts["thank_sub"]
+            )
 
-    st.write("")
     st.subheader(t["section_table"])
     cols = t["tbl_cols"]
     rows = []
@@ -678,6 +716,7 @@ with tab_dash:
                 df_weekly = df_hist[weekly_cols].resample("W-FRI").last().dropna(how="all")
                 if not df_weekly.empty:
                     st.line_chart(df_weekly)
+                    st.caption(t["weekly_caption"])
             else:
                 st.info("Weekly series pending next GitHub Actions run.")
 
