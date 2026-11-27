@@ -1,0 +1,70 @@
+{
+  "updated_at": "2026-11-27 08:36 UTC",
+  "alert_horizon": "126D",
+  "alert_threshold": 90.0,
+  "cnn": {
+    "score": 17.86,
+    "rating": "extreme fear",
+    "prev_close": 15.6
+  },
+  "vix": {
+    "vix": 28.29,
+    "vix_prev": 26.36,
+    "sp500": 7182.78
+  },
+  "aaii": {
+    "date": "Nov 25",
+    "bullish": 37.1,
+    "neutral": 17.5,
+    "bearish": 45.4,
+    "spread": -8.3
+  },
+  "lights": {
+    "cnn_level": "green",
+    "vix_level": "yellow",
+    "aaii_level": "yellow",
+    "green_count": 1
+  },
+  "win_rates": {
+    "21D": {
+      "days": 21,
+      "final_win_rate": 70.25,
+      "win_cnn": 66.11,
+      "win_vix": 77.4,
+      "aaii_bonus": 1.5,
+      "sp_avg_ret": 3.69,
+      "ndx_avg_ret": 5.7,
+      "sample_size": 96
+    },
+    "63D": {
+      "days": 63,
+      "final_win_rate": 90.04,
+      "win_cnn": 77.25,
+      "win_vix": 85.96,
+      "aaii_bonus": 1.5,
+      "sp_avg_ret": 10.14,
+      "ndx_avg_ret": 13.87,
+      "sample_size": 96
+    },
+    "126D": {
+      "days": 126,
+      "final_win_rate": 86.92,
+      "win_cnn": 79.49,
+      "win_vix": 86.99,
+      "aaii_bonus": 1.5,
+      "sp_avg_ret": 14.72,
+      "ndx_avg_ret": 20.95,
+      "sample_size": 96
+    },
+    "252D": {
+      "days": 252,
+      "final_win_rate": 91.93,
+      "win_cnn": 90.96,
+      "win_vix": 88.93,
+      "aaii_bonus": 1.5,
+      "sp_avg_ret": 23.35,
+      "ndx_avg_ret": 33.47,
+      "sample_size": 94
+    }
+  }
+}
