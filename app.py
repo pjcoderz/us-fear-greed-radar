@@ -1,6 +1,6 @@
 import json
 import os
-import urllib.parse
+import random
 import pandas as pd
 import requests as req_lib
 import streamlit as st
@@ -16,7 +16,6 @@ JSON_PATH = os.path.join("data", "sentiment_data.json")
 CSV_PATH = os.path.join("data", "history_backtest.csv")
 COUNTER_PATH = os.path.join("data", "visitor_count.txt")
 
-FEEDBACK_FORM_URL = "https://forms.gle/cPhF8jTsEaycnrGdA"
 GITHUB_REPO_URL = "https://github.com/pjcoderz/us-fear-greed-radar"
 
 # 請將下方 8 行替換為執行 Google Apps Script 後「執行紀錄」印出的實際內容
@@ -29,7 +28,14 @@ ENTRY_AAII = "entry.000005"
 ENTRY_EMOTION = "entry.000006"
 ENTRY_ACTION = "entry.000007"
 
-GOOGLE_FORM_VIEW_URL = GOOGLE_FORM_ACTION_URL.replace("/formResponse", "/viewform")
+CUTE_ANIMALS = [
+    ("🦫", "水豚", "Capybara", "カピバラ"),
+    ("🦊", "小狐狸", "Little Fox", "キツネ"),
+    ("🦉", "貓頭鷹", "Owl", "フクロウ"),
+    ("🦔", "小刺蝟", "Hedgehog", "ハリネズミ"),
+    ("🐢", "小海龜", "Sea Turtle", "ウミガメ"),
+    ("🐧", "小企鵝", "Penguin", "ペンギン"),
+]
 
 I18N = {
     "zh-TW": {
@@ -41,10 +47,9 @@ I18N = {
         "themes": ["護眼米白", "極簡純白", "深邃暗黑"],
         "font_label": "🔠 全站字體大小 (px)",
         "sidebar_note": "本系統將行為財務學中「投資人情緒與報酬反轉」之實證研究轉化為自動化監控工具。",
-        "contact_header": "📬 聯絡作者與學術交流",
-        "contact_btn": "✉️ 聯絡作者 / 意見回饋",
+        "contact_header": "📬 專案與學術說明",
         "github_btn": "💻 GitHub 專案原始碼",
-        "contact_desc": "歡迎提供研究建議、指標回饋或合作交流（開發者：pjcoderz）。",
+        "contact_desc": "本系統僅供行為財務學與投資情緒研究探討（開發者：pjcoderz）。",
         "meta_line": "資料更新：{updated} ｜ 累積瀏覽人次：{visitors:,} ｜ 寄信警報門檻：≥ {threshold}%",
         "tab_dashboard": "📊 即時指標與勝率儀表板",
         "tab_academic": "📚 學術理論基礎與參考文獻",
@@ -90,8 +95,8 @@ I18N = {
             "- **Fisher, K. L., & Statman, M. (2000).** Investor sentiment and stock returns. *Financial Analysts Journal*, 56(2), 16-23. https://doi.org/10.2469/faj.v56.n2.2340\n"
             "- **Baker, M., & Wurgler, J. (2006).** Investor sentiment and the cross-section of stock returns. *The Journal of Finance*, 61(4), 1645-1680. https://doi.org/10.1111/j.1540-6261.2006.00885.x\n"
             "- **Da, Z., Engelberg, J., & Gao, P. (2015).** The sum of all FEARS: Investor sentiment and asset prices. *The Review of Financial Studies*, 28(1), 1-32. https://doi.org/10.1093/rfs/hhu072\n\n"
-            "### 三、聯絡作者與研究限制聲明\n\n"
-            "本系統為行為財務學實證模型之教育與研究應用，歷史條件機率不保證未來必然獲利。如有學術交流或建議，歡迎透過「聯絡作者」表單聯繫。"
+            "### 三、研究限制聲明\n\n"
+            "本系統為行為財務學實證模型之教育與研究應用，歷史條件機率不保證未來必然獲利，非投資建議。"
         ),
     },
     "en": {
@@ -103,10 +108,9 @@ I18N = {
         "themes": ["Warm Paper", "Clean White", "Deep Dark"],
         "font_label": "🔠 Base Font Size (px)",
         "sidebar_note": "Translates empirical Behavioral Finance research on investor sentiment and return reversals into an automated monitor.",
-        "contact_header": "📬 Contact Author & Feedback",
-        "contact_btn": "✉️ Contact Author / Feedback",
+        "contact_header": "📬 Project & Academic Info",
         "github_btn": "💻 GitHub Repository",
-        "contact_desc": "Questions, feedback, or academic collaboration inquiries are welcome (Author: pjcoderz).",
+        "contact_desc": "Academic and educational dashboard on behavioral sentiment and return reversals (Author: pjcoderz).",
         "meta_line": "Updated: {updated} ｜ Visitors: {visitors:,} ｜ Email Alert Threshold: ≥ {threshold}%",
         "tab_dashboard": "📊 Live Sentiment & Win-Rate Dashboard",
         "tab_academic": "📚 Academic Foundations & Literature",
@@ -152,8 +156,8 @@ I18N = {
             "- **Fisher, K. L., & Statman, M. (2000).** Investor sentiment and stock returns. *Financial Analysts Journal*, 56(2), 16-23. https://doi.org/10.2469/faj.v56.n2.2340\n"
             "- **Baker, M., & Wurgler, J. (2006).** Investor sentiment and the cross-section of stock returns. *The Journal of Finance*, 61(4), 1645-1680. https://doi.org/10.1111/j.1540-6261.2006.00885.x\n"
             "- **Da, Z., Engelberg, J., & Gao, P. (2015).** The sum of all FEARS: Investor sentiment and asset prices. *The Review of Financial Studies*, 28(1), 1-32. https://doi.org/10.1093/rfs/hhu072\n\n"
-            "### 3. Contact & Disclaimer\n\n"
-            "Built for academic research and educational illustration of behavioral finance models. Use the Contact Author button for inquiries."
+            "### 3. Disclaimer\n\n"
+            "Built for academic research and educational illustration of behavioral finance models, not financial advice."
         ),
     },
     "ja": {
@@ -165,10 +169,9 @@ I18N = {
         "themes": ["アイボリー", "ピュアホワイト", "ダークモード"],
         "font_label": "🔠 フォントサイズ (px)",
         "sidebar_note": "行動ファイナンスにおける投資家心理とリターン反転の実証研究を自動モニタリングツールとして実装しています。",
-        "contact_header": "📬 作者への連絡・フィードバック",
-        "contact_btn": "✉️ 作者へ連絡 / フィードバック",
+        "contact_header": "📬 プロジェクト・学術情報",
         "github_btn": "💻 GitHub リポジトリ",
-        "contact_desc": "研究に関するご意見やお問い合わせはフォームよりお送りください（開発者：pjcoderz）。",
+        "contact_desc": "行動ファイナンスと投資心理の学術・教育向けダッシュボードです（開発者：pjcoderz）。",
         "meta_line": "最終更新：{updated} ｜ 累計訪問者数：{visitors:,} ｜ メール通知閾値：≥ {threshold}%",
         "tab_dashboard": "📊 リアルタイム指標・勝率ダッシュボード",
         "tab_academic": "📚 学術的根拠・参考文献",
@@ -214,8 +217,8 @@ I18N = {
             "- **Fisher, K. L., & Statman, M. (2000).** Investor sentiment and stock returns. *Financial Analysts Journal*, 56(2), 16-23. https://doi.org/10.2469/faj.v56.n2.2340\n"
             "- **Baker, M., & Wurgler, J. (2006).** Investor sentiment and the cross-section of stock returns. *The Journal of Finance*, 61(4), 1645-1680. https://doi.org/10.1111/j.1540-6261.2006.00885.x\n"
             "- **Da, Z., Engelberg, J., & Gao, P. (2015).** The sum of all FEARS: Investor sentiment and asset prices. *The Review of Financial Studies*, 28(1), 1-32. https://doi.org/10.1093/rfs/hhu072\n\n"
-            "### 3. 免責事項・お問い合わせ\n\n"
-            "本アプリケーションは行動ファイナンスの実証モデルを学ぶための学術・教育用途です。お問い合わせは連絡ボタンをご利用ください。"
+            "### 3. 免責事項\n\n"
+            "本アプリケーションは行動ファイナンスの実証モデルを学ぶための学術・教育用途であり、投資助言ではありません。"
         ),
     },
 }
@@ -261,7 +264,6 @@ with st.sidebar:
     st.divider()
     st.subheader(t["contact_header"])
     st.caption(t["contact_desc"])
-    st.link_button(t["contact_btn"], FEEDBACK_FORM_URL, use_container_width=True)
     st.link_button(t["github_btn"], GITHUB_REPO_URL, use_container_width=True)
 
     st.divider()
@@ -295,7 +297,6 @@ if not os.path.exists(JSON_PATH):
     _, tab_acad_only = st.tabs([t["tab_dashboard"], t["tab_academic"]])
     with tab_acad_only:
         st.markdown(t["academic_md"])
-        st.link_button(t["contact_btn"], FEEDBACK_FORM_URL)
     st.stop()
 
 with open(JSON_PATH, "r", encoding="utf-8") as f:
@@ -399,6 +400,194 @@ with tab_dash:
         )
         st.markdown(c3_html, unsafe_allow_html=True)
 
+    # ================= 獨立卡片外框：雙題 5 點量表（單一送出按鈕、背景寫入 Google 表單） =================
+    st.write("")
+    survey_texts = {
+        "zh-TW": {
+            "title": "🗳️ 行為實驗：主觀情緒與操作傾向（5 點量表）",
+            "prompt_lead": "看完今日指標了嗎？滑動 10 秒記錄您的真實反應",
+            "invite": "💡 **只需 10 秒，邀請您參與行為財務學匿名小實驗！** 您的真實直覺與反應，能幫助我們更深入理解市場情緒與投資決策。",
+            "pre_ethics": (
+                "**研究倫理聲明（送出前請閱覽）**：本匿名調查探討檢視美股恐慌指標與歷史勝率後之「反身性」行為反應。"
+                "不收集姓名、Email 或 IP，僅記錄時間戳記、當下指標數值與量表分數；採盲測設計不公開即時票數以防從眾偏誤，僅供學術探討，非投資建議。"
+            ),
+            "expander_label": "📜 檢視完整知情同意細節",
+            "ethics_detail": (
+                "1. **研究目的**：分別測量投資人檢視指標與歷史勝率後之「主觀情緒（1–5分）」與「操作傾向（1–5分）」。\n"
+                "2. **自願與匿名**：參與完全自願，可隨時中止；資料僅儲存於研究者專屬 Google 試算表作彙整分析。\n"
+                "3. **盲測防反身性**：填答後不顯示他人投票統計，避免資訊瀑布與從眾效應干擾研究效度。"
+            ),
+            "q1_label": "【題目一：主觀情緒感受】看到目前數據後，您此刻對美股的情緒偏向？",
+            "q1_opts": {
+                1: "1 分 — 極度恐慌 / 非常悲觀",
+                2: "2 分 — 略感恐慌 / 偏悲觀",
+                3: "3 分 — 中性平靜 / 看看聽聽（維持原狀）",
+                4: "4 分 — 略感樂觀 / 偏貪婪",
+                5: "5 分 — 極度樂觀 / 非常貪婪",
+            },
+            "q2_label": "【題目二：實際操作傾向】看到目前數據後，您接下來的資金操作傾向？",
+            "q2_opts": {
+                1: "1 分 — 傾向大幅減碼 / 賣出避險",
+                2: "2 分 — 傾向小幅減碼 / 保守防禦",
+                3: "3 分 — 按兵不動 / 觀望或堅持原本定見",
+                4: "4 分 — 傾向分批試單 / 小幅逆向買進",
+                5: "5 分 — 傾向積極加碼 / 大幅逆向買進",
+            },
+            "consent_chk": "我已閱讀上述研究倫理聲明，並同意以完全匿名方式參與本研究",
+            "submit": "✨ 匿名送出兩題量表",
+            "thank_line": "我們謝謝你 😊",
+            "thank_sub": "您的匿名作答已記錄（採盲測設計，不公開即時統計；僅供學術探討，非投資建議）。",
+            "already": "ℹ️ 您在本次瀏覽中已完成填答，我們謝謝你 😊",
+        },
+        "en": {
+            "title": "🗳️ Behavioral Experiment: Emotion & Action Tendency (5-Point Scale)",
+            "prompt_lead": "Finished checking today's indicators? Spend 10 seconds recording your genuine reaction.",
+            "invite": "💡 **In just 10 seconds, you are invited to join a short anonymous behavioral finance experiment.** Your genuine intuition helps us better understand market sentiment and investment decisions.",
+            "pre_ethics": (
+                "**Research Ethics Notice (Please Read Before Submitting)**: This anonymous survey examines investor reflexivity after viewing sentiment indicators and win rates. "
+                "No names, emails, or IPs are collected—only timestamps, current indicator values, and scale ratings. Aggregate results remain blinded to prevent herding; for academic research only, not financial advice."
+            ),
+            "expander_label": "📜 View Full Informed Consent Details",
+            "ethics_detail": (
+                "1. **Purpose**: Separately measures subjective emotion (1–5) and action tendency (1–5) after viewing sentiment and win-rate data.\n"
+                "2. **Voluntary & Anonymous**: Participation is voluntary; responses are stored in the researcher's private Google Sheet for aggregate analysis.\n"
+                "3. **Blinded Design**: Live tallies are hidden to prevent herding and information cascades."
+            ),
+            "q1_label": "[Q1: Subjective Emotion] After viewing the data, how do you feel about US equities?",
+            "q1_opts": {
+                1: "1 — Extreme Fear / Very Bearish",
+                2: "2 — Mild Fear / Slightly Bearish",
+                3: "3 — Neutral / Wait-and-See (Unchanged)",
+                4: "4 — Mild Greed / Slightly Bullish",
+                5: "5 — Extreme Greed / Very Bullish",
+            },
+            "q2_label": "[Q2: Action Tendency] After viewing the data, what is your intended portfolio action?",
+            "q2_opts": {
+                1: "1 — Strongly Reduce / Sell to Hedge",
+                2: "2 — Slightly Trim / Stay Defensive",
+                3: "3 — Hold Steady / Observe or Stick to Prior Plan",
+                4: "4 — Scale In / Contrarian Buy Gradually",
+                5: "5 — Strongly Add / Aggressive Contrarian Buy",
+            },
+            "consent_chk": "I have read the research ethics notice above and consent to participate anonymously",
+            "submit": "✨ Submit Anonymous Ratings",
+            "thank_line": "Thank you 😊",
+            "thank_sub": "Your anonymous response has been recorded (blinded design, no live tallies; academic research only, not financial advice).",
+            "already": "ℹ️ You have already submitted a response in this session. Thank you 😊",
+        },
+        "ja": {
+            "title": "🗳️ 行動実験：主観的感情と行動傾向（5段階尺度）",
+            "prompt_lead": "本日の指標はご覧になりましたか？10秒で素直な反応をお聞かせください。",
+            "invite": "💡 **わずか10秒、行動ファイナンスの匿名ミニ実験にご参加ください。** あなたの素直な直感と反応が、市場心理と投資行動の理解に役立ちます。",
+            "pre_ethics": (
+                "**研究倫理声明（送信前にお読みください）**：本匿名調査は恐怖指数と実証勝率を閲覧した後の投資家の再帰性（リフレクシビティ）を検証します。"
+                "氏名・メール・IPアドレスは収集せず、タイムスタンプ・指標値・尺度スコアのみを記録します。群集バイアス防止のため集計結果は非公開とし、学術目的のみで投資助言ではありません。"
+            ),
+            "expander_label": "📜 インフォームドコンセントの詳細を見る",
+            "ethics_detail": (
+                "1. **研究目的**：指標と勝率を閲覧した後の「主観的感情（1〜5点）」と「行動傾向（1〜5点）」を分離測定します。\n"
+                "2. **任意参加・匿名性**：参加は任意であり、データは研究者専用のGoogleスプレッドシートに集計分析用として保存されます。\n"
+                "3. **ブラインド設計**：群集行動や情報カスケードを防ぐため、リアルタイム集計は非公開です。"
+            ),
+            "q1_label": "【質問1：主観的感情】現在のデータを見た後の米国株に対する心理状態は？",
+            "q1_opts": {
+                1: "1点 — 極度の恐怖 / 非常に弱気",
+                2: "2点 — やや恐怖 / 弱気寄り",
+                3: "3点 — 中立・様子見（変化なし）",
+                4: "4点 — やや強欲 / 強気寄り",
+                5: "5点 — 極度の強欲 / 非常に強気",
+            },
+            "q2_label": "【質問2：実際の行動傾向】現在のデータを見た後の資金配分・売買の意向は？",
+            "q2_opts": {
+                1: "1点 — 大幅にポジション縮小 / ヘッジ売り",
+                2: "2点 — やや縮小 / 守備的に調整",
+                3: "3点 — 静観・様子見（当初の方針を維持）",
+                4: "4点 — 少しずつ逆張り買い / 打診買い",
+                5: "5点 — 積極的に逆張り買い / 大幅買い増し",
+            },
+            "consent_chk": "上記の研究倫理声明を読み、完全匿名での研究参加に同意します",
+            "submit": "✨ 匿名で5段階評価を送信",
+            "thank_line": "ありがとうございます 😊",
+            "thank_sub": "匿名回答を記録しました（ブラインド設計のため集計非公開・学術研究目的であり投資助言ではありません）。",
+            "already": "ℹ️ このセッションでは既に回答済みです。ありがとうございます 😊",
+        },
+    }[selected_lang]
+
+    if "voted_in_session" not in st.session_state:
+        st.session_state["voted_in_session"] = False
+    if "thank_animal" not in st.session_state:
+        st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
+
+    with st.container(border=True):
+        st.subheader(survey_texts["title"])
+        st.markdown("**" + survey_texts["prompt_lead"] + "**")
+        st.markdown(survey_texts["invite"])
+        st.info(survey_texts["pre_ethics"])
+        with st.expander(survey_texts["expander_label"], expanded=False):
+            st.markdown(survey_texts["ethics_detail"])
+
+        if not st.session_state["voted_in_session"]:
+            emo_score = st.radio(
+                survey_texts["q1_label"],
+                options=[1, 2, 3, 4, 5],
+                index=None,
+                format_func=lambda x: survey_texts["q1_opts"][x],
+            )
+            act_score = st.radio(
+                survey_texts["q2_label"],
+                options=[1, 2, 3, 4, 5],
+                index=None,
+                format_func=lambda x: survey_texts["q2_opts"][x],
+            )
+
+            agreed = st.checkbox(survey_texts["consent_chk"], value=False)
+            can_submit = (emo_score is not None) and (act_score is not None) and bool(agreed)
+
+            if st.button(survey_texts["submit"], disabled=not can_submit, use_container_width=True):
+                emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
+                act_payload = (
+                    str(act_score)
+                    + " | 126D_Win:"
+                    + str(win_rates["126D"]["final_win_rate"])
+                    + "% | "
+                    + survey_texts["q2_opts"][act_score]
+                )
+                form_data = {
+                    ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
+                    ENTRY_LANG: str(selected_lang),
+                    ENTRY_CNN: str(cnn["score"]),
+                    ENTRY_VIX: str(vix["vix"]),
+                    ENTRY_AAII: str(aaii["bearish"]),
+                    ENTRY_EMOTION: emo_payload,
+                    ENTRY_ACTION: act_payload,
+                }
+                try:
+                    req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=10)
+                except Exception:
+                    pass
+                st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
+                st.session_state["voted_in_session"] = True
+                st.rerun()
+        else:
+            icon_ch, name_zh, name_en, name_ja = st.session_state["thank_animal"]
+            if selected_lang == "zh-TW":
+                animal_label = name_zh
+            elif selected_lang == "en":
+                animal_label = name_en
+            else:
+                animal_label = name_ja
+
+            st.success(
+                icon_ch
+                + " **"
+                + animal_label
+                + "**："
+                + survey_texts["thank_line"]
+                + "\n\n"
+                + survey_texts["thank_sub"]
+            )
+
+    st.write("")
     st.subheader(t["section_table"])
     cols = t["tbl_cols"]
     rows = []
@@ -443,179 +632,6 @@ with tab_dash:
             else:
                 st.info("AAII weekly series pending next GitHub Actions run.")
 
-    # ================= 前置倫理聲明 + 勾選解鎖 + 雙題 5 點量表（背景靜默寫入 Google 表單） =================
-    st.divider()
-    survey_texts = {
-        "zh-TW": {
-            "title": "🗳️ 行為實驗：檢視目前指標與勝率後，您的主觀情緒與操作傾向",
-            "pre_ethics": (
-                "**研究倫理聲明（送出前請閱覽）**：本匿名調查探討檢視美股恐慌指標與歷史勝率後之「反身性」行為反應。"
-                "不收集姓名、Email 或 IP，僅記錄時間戳記、當下指標數值與量表分數；採盲測設計不公開即時票數以防從眾偏誤，僅供學術探討，非投資建議。"
-            ),
-            "expander_label": "📜 檢視完整知情同意細節",
-            "ethics_detail": (
-                "1. **研究目的**：分別測量投資人檢視指標與歷史勝率後之「主觀情緒（1–5分）」與「操作傾向（1–5分）」，觀察觀望（中間點）與定見維持現象。\n"
-                "2. **自願與匿名**：參與完全自願，可隨時中止；資料僅儲存於研究者專屬 Google 試算表作彙整分析。\n"
-                "3. **盲測防反身性**：填答後不顯示他人投票統計，避免資訊瀑布與從眾效應干擾研究效度。"
-            ),
-            "q1_label": "【題目一：主觀情緒感受】看到目前數據後，您此刻對美股的情緒偏向？",
-            "q1_opts": {
-                1: "1 分 — 極度恐慌 / 非常悲觀",
-                2: "2 分 — 略感恐慌 / 偏悲觀",
-                3: "3 分 — 中性平靜 / 看看聽聽（維持原狀）",
-                4: "4 分 — 略感樂觀 / 偏貪婪",
-                5: "5 分 — 極度樂觀 / 非常貪婪",
-            },
-            "q2_label": "【題目二：實際操作傾向】看到目前數據後，您接下來的資金操作傾向？",
-            "q2_opts": {
-                1: "1 分 — 傾向大幅減碼 / 賣出避險",
-                2: "2 分 — 傾向小幅減碼 / 保守防禦",
-                3: "3 分 — 按兵不動 / 觀望或堅持原本定見",
-                4: "4 分 — 傾向分批試單 / 小幅逆向買進",
-                5: "5 分 — 傾向積極加碼 / 大幅逆向買進",
-            },
-            "consent_chk": "我已閱讀上述研究倫理聲明，並同意以完全匿名方式參與本研究",
-            "submit": "匿名送出兩題量表",
-            "form_link": "📋 開啟 Google 表單版（自動帶入今日指標）",
-            "thanks": "✅ 感謝參與！您的情緒與操作量表已匿名寫入研究表單（採盲測設計，不公開即時統計）。",
-            "already": "ℹ️ 您在本次瀏覽中已完成填答，感謝協助學術研究！",
-        },
-        "en": {
-            "title": "🗳️ Behavioral Experiment: Your Emotion & Action Tendency (1–5 Scale)",
-            "pre_ethics": (
-                "**Research Ethics Notice (Please Read Before Submitting)**: This anonymous survey examines investor reflexivity after viewing sentiment indicators and win rates. "
-                "No names, emails, or IPs are collected—only timestamps, current indicator values, and scale ratings. Aggregate results remain blinded to prevent herding; for academic research only, not financial advice."
-            ),
-            "expander_label": "📜 View Full Informed Consent Details",
-            "ethics_detail": (
-                "1. **Purpose**: Separately measures subjective emotion (1–5) and action tendency (1–5) after viewing sentiment and win-rate data.\n"
-                "2. **Voluntary & Anonymous**: Participation is voluntary; responses are stored in the researcher's private Google Sheet for aggregate analysis.\n"
-                "3. **Blinded Design**: Live tallies are hidden to prevent herding and information cascades."
-            ),
-            "q1_label": "[Q1: Subjective Emotion] After viewing the data, how do you feel about US equities?",
-            "q1_opts": {
-                1: "1 — Extreme Fear / Very Bearish",
-                2: "2 — Mild Fear / Slightly Bearish",
-                3: "3 — Neutral / Wait-and-See (Unchanged)",
-                4: "4 — Mild Greed / Slightly Bullish",
-                5: "5 — Extreme Greed / Very Bullish",
-            },
-            "q2_label": "[Q2: Action Tendency] After viewing the data, what is your intended portfolio action?",
-            "q2_opts": {
-                1: "1 — Strongly Reduce / Sell to Hedge",
-                2: "2 — Slightly Trim / Stay Defensive",
-                3: "3 — Hold Steady / Observe or Stick to Prior Plan",
-                4: "4 — Scale In / Contrarian Buy Gradually",
-                5: "5 — Strongly Add / Aggressive Contrarian Buy",
-            },
-            "consent_chk": "I have read the research ethics notice above and consent to participate anonymously",
-            "submit": "Submit Anonymous Ratings",
-            "form_link": "📋 Open Google Form Version (Pre-filled)",
-            "thanks": "✅ Thank you! Your emotion and action ratings have been recorded anonymously (results blinded).",
-            "already": "ℹ️ You have already submitted a response in this session. Thank you!",
-        },
-        "ja": {
-            "title": "🗳️ 行動実験：指標と勝率を見た後の主観的感情と行動傾向（5段階尺度）",
-            "pre_ethics": (
-                "**研究倫理声明（送信前にお読みください）**：本匿名調査は恐怖指数と実証勝率を閲覧した後の投資家の再帰性（リフレクシビティ）を検証します。"
-                "氏名・メール・IPアドレスは収集せず、タイムスタンプ・指標値・尺度スコアのみを記録します。群集バイアス防止のため集計結果は非公開とし、学術目的のみで投資助言ではありません。"
-            ),
-            "expander_label": "📜 インフォームドコンセントの詳細を見る",
-            "ethics_detail": (
-                "1. **研究目的**：指標と勝率を閲覧した後の「主観的感情（1〜5点）」と「行動傾向（1〜5点）」を分離測定し、様子見や定見維持の傾向を検証します。\n"
-                "2. **任意参加・匿名性**：参加は任意であり、データは研究者専用のGoogleスプレッドシートに集計分析用として保存されます。\n"
-                "3. **ブラインド設計**：群集行動や情報カスケードを防ぐため、リアルタイム集計は非公開です。"
-            ),
-            "q1_label": "【質問1：主観的感情】現在のデータを見た後の米国株に対する心理状態は？",
-            "q1_opts": {
-                1: "1点 — 極度の恐怖 / 非常に弱気",
-                2: "2点 — やや恐怖 / 弱気寄り",
-                3: "3点 — 中立・様子見（変化なし）",
-                4: "4点 — やや強欲 / 強気寄り",
-                5: "5点 — 極度の強欲 / 非常に強気",
-            },
-            "q2_label": "【質問2：実際の行動傾向】現在のデータを見た後の資金配分・売買の意向は？",
-            "q2_opts": {
-                1: "1点 — 大幅にポジション縮小 / ヘッジ売り",
-                2: "2点 — やや縮小 / 守備的に調整",
-                3: "3点 — 静観・様子見（当初の方針を維持）",
-                4: "4点 — 少しずつ逆張り買い / 打診買い",
-                5: "5点 — 積極的に逆張り買い / 大幅買い増し",
-            },
-            "consent_chk": "上記の研究倫理声明を読み、完全匿名での研究参加に同意します",
-            "submit": "匿名で5段階評価を送信",
-            "form_link": "📋 Googleフォーム版を開く（本日の指標値を自動入力）",
-            "thanks": "✅ ご協力ありがとうございます。感情・行動尺度を匿名で記録しました（集計結果は非公開です）。",
-            "already": "ℹ️ このセッションでは既に回答済みです。ありがとうございます！",
-        },
-    }[selected_lang]
-
-    st.subheader(survey_texts["title"])
-    st.info(survey_texts["pre_ethics"])
-    with st.expander(survey_texts["expander_label"], expanded=False):
-        st.markdown(survey_texts["ethics_detail"])
-
-    if "voted_in_session" not in st.session_state:
-        st.session_state["voted_in_session"] = False
-
-    if not st.session_state["voted_in_session"]:
-        emo_score = st.select_slider(
-            survey_texts["q1_label"],
-            options=[1, 2, 3, 4, 5],
-            value=3,
-            format_func=lambda x: survey_texts["q1_opts"][x],
-        )
-        act_score = st.select_slider(
-            survey_texts["q2_label"],
-            options=[1, 2, 3, 4, 5],
-            value=3,
-            format_func=lambda x: survey_texts["q2_opts"][x],
-        )
-
-        agreed = st.checkbox(survey_texts["consent_chk"], value=False)
-
-        emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
-        act_payload = (
-            str(act_score)
-            + " | 126D_Win:"
-            + str(win_rates["126D"]["final_win_rate"])
-            + "% | "
-            + survey_texts["q2_opts"][act_score]
-        )
-
-        form_data = {
-            ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
-            ENTRY_LANG: str(selected_lang),
-            ENTRY_CNN: str(cnn["score"]),
-            ENTRY_VIX: str(vix["vix"]),
-            ENTRY_AAII: str(aaii["bearish"]),
-            ENTRY_EMOTION: emo_payload,
-            ENTRY_ACTION: act_payload,
-        }
-
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button(survey_texts["submit"], disabled=not agreed, use_container_width=True):
-                try:
-                    req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=10)
-                except Exception:
-                    pass
-                st.session_state["voted_in_session"] = True
-                st.success(survey_texts["thanks"])
-        with col_btn2:
-            prefill_query = urllib.parse.urlencode(form_data)
-            st.link_button(
-                survey_texts["form_link"],
-                GOOGLE_FORM_VIEW_URL + "?usp=pp_url&" + prefill_query,
-                use_container_width=True,
-            )
-    else:
-        st.success(survey_texts["already"])
-
 with tab_acad:
     st.markdown(t["academic_md"])
-    c_a, c_b = st.columns(2)
-    with c_a:
-        st.link_button(t["contact_btn"], FEEDBACK_FORM_URL, use_container_width=True)
-    with c_b:
-        st.link_button(t["github_btn"], GITHUB_REPO_URL, use_container_width=True)
+    st.link_button(t["github_btn"], GITHUB_REPO_URL)
