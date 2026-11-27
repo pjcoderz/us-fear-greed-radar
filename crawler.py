@@ -252,6 +252,20 @@ def fetch_vix_and_benchmarks():
     return {"vix": vix_now, "vix_prev": vix_prev, "sp500": sp500_now}, df_mkt
 
 
+def _parse_aaii_date(raw_str):
+    if not raw_str:
+        return pd.NaT
+    s = str(raw_str).strip()
+    dt = pd.to_datetime(s, errors="coerce")
+    if pd.isna(dt):
+        # 處理像 "Nov 26" 或 "Nov 26, 2026" 格式
+        cur_year = datetime.now(timezone.utc).year
+        dt = pd.to_datetime(s + " " + str(cur_year), errors="coerce")
+    if pd.notna(dt):
+        return dt.tz_localize(None).normalize()
+    return pd.NaT
+
+
 def fetch_aaii_data():
     url = "https://www.aaii.com/sentimentsurvey/sent_results"
     resp = safe_request(url)
@@ -272,8 +286,10 @@ def fetch_aaii_data():
                                 pct_nums.append(parsed)
                     if len(pct_nums) >= 3:
                         bullish, neutral, bearish = pct_nums[0], pct_nums[1], pct_nums[2]
+                        dt_val = _parse_aaii_date(vals[0] if vals else "")
                         hist_records.append({
-                            "date": vals[0] if vals else "Latest",
+                            "Date": dt_val,
+                            "date_str": vals[0] if vals else "Latest",
                             "bullish": bullish,
                             "neutral": neutral,
                             "bearish": bearish,
@@ -282,21 +298,13 @@ def fetch_aaii_data():
         except Exception as e:
             print("[Warn] AAII HTML:", str(e))
 
-    if hist_records:
-        df_aaii_hist = pd.DataFrame(hist_records)
-        df_aaii_hist["Date"] = pd.to_datetime(df_aaii_hist["date"], errors="coerce").dt.normalize()
-        df_aaii_hist = (
-            df_aaii_hist.dropna(subset=["Date"])
-            .drop_duplicates(subset=["Date"], keep="first")
-            .sort_values("Date")
-            .set_index("Date")
-        )
-        if not df_aaii_hist.empty:
-            return hist_records[0], df_aaii_hist[["bearish"]].rename(columns={"bearish": "AAII_Bearish"})
-
+    backup_frames = []
     backup_urls = [
         "https://raw.githubusercontent.com/datasets/aaii-sentiment/main/data/aaii-sentiment.csv",
+        "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/aaii-sentiment.csv",
     ]
+    latest_from_backup = None
+
     for b_url in backup_urls:
         b_resp = safe_request(b_url)
         if b_resp:
@@ -304,40 +312,75 @@ def fetch_aaii_data():
                 bdf = pd.read_csv(StringIO(b_resp.text)).dropna(how="all")
                 if not bdf.empty:
                     date_col = bdf.columns[0]
-                    bdf["Date"] = pd.to_datetime(bdf[date_col], errors="coerce").dt.normalize()
+                    bdf["Date"] = pd.to_datetime(bdf[date_col], errors="coerce").dt.tz_localize(None).dt.normalize()
                     b_col = "Bearish" if "Bearish" in bdf.columns else bdf.columns[3]
                     bdf["AAII_Bearish"] = bdf[b_col].apply(lambda x: _parse_float(x, 0, 100))
-                    bdf_clean = (
-                        bdf.dropna(subset=["Date", "AAII_Bearish"])
-                        .sort_values("Date")
-                        .set_index("Date")
-                    )
+                    # 若資料是 0~1 小數自動轉為百分比
+                    if bdf["AAII_Bearish"].dropna().max() <= 1.0:
+                        bdf["AAII_Bearish"] = (bdf["AAII_Bearish"] * 100.0).round(2)
 
-                    last = bdf.iloc[-1]
-                    bullish = _parse_float(
-                        last.get("Bullish", last.iloc[1] if len(last) > 1 else None), 0, 100
-                    )
-                    neutral = _parse_float(
-                        last.get("Neutral", last.iloc[2] if len(last) > 2 else None), 0, 100
-                    )
-                    bearish = _parse_float(
-                        last.get("Bearish", last.iloc[3] if len(last) > 3 else None), 0, 100
-                    )
-                    if bullish is not None and bearish is not None:
-                        if neutral is None:
-                            neutral = round(max(0.0, 100.0 - bullish - bearish), 2)
-                        latest_obj = {
-                            "date": str(last.iloc[0]),
-                            "bullish": bullish,
-                            "neutral": neutral,
-                            "bearish": bearish,
-                            "spread": round(bullish - bearish, 2),
-                        }
-                        return latest_obj, bdf_clean[["AAII_Bearish"]]
+                    clean_b = bdf.dropna(subset=["Date", "AAII_Bearish"])[["Date", "AAII_Bearish"]]
+                    if not clean_b.empty:
+                        backup_frames.append(clean_b)
+                        last = bdf.dropna(subset=["Date", "AAII_Bearish"]).sort_values("Date").iloc[-1]
+                        bull_raw = _parse_float(
+                            last.get("Bullish", last.iloc[1] if len(last) > 1 else None), 0, 100
+                        )
+                        neut_raw = _parse_float(
+                            last.get("Neutral", last.iloc[2] if len(last) > 2 else None), 0, 100
+                        )
+                        bear_val = float(last["AAII_Bearish"])
+                        if bull_raw is not None and bull_raw <= 1.0:
+                            bull_raw = round(bull_raw * 100.0, 2)
+                        if neut_raw is not None and neut_raw <= 1.0:
+                            neut_raw = round(neut_raw * 100.0, 2)
+                        if bull_raw is not None:
+                            if neut_raw is None:
+                                neut_raw = round(max(0.0, 100.0 - bull_raw - bear_val), 2)
+                            latest_from_backup = {
+                                "date": str(last["Date"].strftime("%Y-%m-%d")),
+                                "bullish": bull_raw,
+                                "neutral": neut_raw,
+                                "bearish": bear_val,
+                                "spread": round(bull_raw - bear_val, 2),
+                            }
             except Exception as e:
                 print("[Warn] AAII backup:", str(e))
 
-    return None, pd.DataFrame(columns=["AAII_Bearish"])
+    all_series = []
+    if backup_frames:
+        all_series.extend(backup_frames)
+
+    latest_obj = None
+    if hist_records:
+        first_rec = hist_records[0]
+        latest_obj = {
+            "date": first_rec["date_str"],
+            "bullish": first_rec["bullish"],
+            "neutral": first_rec["neutral"],
+            "bearish": first_rec["bearish"],
+            "spread": first_rec["spread"],
+        }
+        df_web = pd.DataFrame(hist_records).dropna(subset=["Date"])
+        if not df_web.empty:
+            all_series.append(
+                df_web[["Date", "bearish"]].rename(columns={"bearish": "AAII_Bearish"})
+            )
+
+    if latest_obj is None:
+        latest_obj = latest_from_backup
+
+    if all_series:
+        merged_aaii = (
+            pd.concat(all_series, ignore_index=True)
+            .dropna(subset=["Date", "AAII_Bearish"])
+            .drop_duplicates(subset=["Date"], keep="last")
+            .sort_values("Date")
+            .set_index("Date")
+        )
+        return latest_obj, merged_aaii[["AAII_Bearish"]]
+
+    return latest_obj, pd.DataFrame(columns=["AAII_Bearish"])
 
 
 def evaluate_lights(cnn_score, vix_val, aaii_bearish):
@@ -362,8 +405,10 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
         df["CNN_FG"] = cnn_now
 
     if df_aaii_hist is not None and not df_aaii_hist.empty:
-        df = df.join(df_aaii_hist, how="left")
-        df["AAII_Bearish"] = df["AAII_Bearish"].ffill().bfill().fillna(aaii_now["bearish"])
+        # 將每週 AAII 對齊到交易日曆並向後填補至下次週報更新
+        combined_idx = df.index.union(df_aaii_hist.index).sort_values()
+        s_aaii = df_aaii_hist["AAII_Bearish"].reindex(combined_idx).ffill().bfill()
+        df["AAII_Bearish"] = s_aaii.reindex(df.index).fillna(aaii_now["bearish"])
     else:
         df["AAII_Bearish"] = aaii_now["bearish"]
 
