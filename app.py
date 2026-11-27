@@ -317,31 +317,19 @@ style = THEME_PALETTES[theme_idx]
 
 css_block = (
     "<style>"
-    ".stApp { background-color: " + style["bg"] + "; color: " + style["text"] + "; font-size: " + str(font_size) + "px; }"
+    ".stApp, .stApp p, .stApp label, .stApp span { color: " + style["text"] + "; }"
+    ".stApp { background-color: " + style["bg"] + "; font-size: " + str(font_size) + "px; }"
     ".radar-card { background-color: " + style["card"] + "; border: 1px solid " + style["border"] + "; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }"
     ".metric-big { font-size: " + str(font_size + 14) + "px; font-weight: 800; margin: 6px 0; }"
-    ".badge-green { background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
-    ".badge-yellow { background-color: #FEF9C3; color: #854D0E; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
-    ".badge-red { background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
+    ".badge-green { background-color: #DCFCE7; color: #166534 !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
+    ".badge-yellow { background-color: #FEF9C3; color: #854D0E !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
+    ".badge-red { background-color: #FEE2E2; color: #991B1B !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".lab-badge-wrap { text-align: center; margin-bottom: 8px; }"
-    ".lab-badge { display: inline-block; background-color: " + style["lab_badge_bg"] + "; color: " + style["lab_badge_fg"] + "; padding: 6px 16px; border-radius: 999px; font-weight: 800; font-size: " + str(font_size + 1) + "px; letter-spacing: 0.4px; }"
-    ".lab-hero-center { text-align: center; font-size: " + str(font_size + 2) + "px; font-weight: 800; color: " + style["lab_text"] + "; margin: 6px 0 8px 0; }"
-    ".sec-big { font-size: " + str(font_size + 3) + "px; font-weight: 800; color: " + style["time_highlight"] + "; }"
-    "div[data-testid='stVerticalBlockBorderWrapper']:has(#survey-lab-marker) {"
-    "  background-color: " + style["lab_bg"] + " !important;"
-    "  color: " + style["lab_text"] + " !important;"
-    "  border: 2.5px solid " + style["lab_border"] + " !important;"
-    "  border-top: 8px solid " + style["lab_border"] + " !important;"
-    "  border-radius: 18px !important;"
-    "  padding: 20px 18px !important;"
-    "  margin: 22px 0 26px 0 !important;"
-    "  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10) !important;"
-    "}"
-    "div[data-testid='stVerticalBlockBorderWrapper']:has(#survey-lab-marker) [data-testid='stAlert'] {"
-    "  background-color: " + style["info_bg"] + " !important;"
-    "  color: " + style["lab_text"] + " !important;"
-    "  border: 1px solid " + style["lab_border"] + " !important;"
-    "}"
+    ".lab-badge { display: inline-block; background-color: " + style["lab_badge_bg"] + "; color: " + style["lab_badge_fg"] + " !important; padding: 6px 16px; border-radius: 999px; font-weight: 800; font-size: " + str(font_size + 1) + "px; letter-spacing: 0.4px; }"
+    ".lab-hero-center { text-align: center; font-size: " + str(font_size + 2) + "px; font-weight: 800; color: " + style["lab_text"] + " !important; margin: 6px 0 8px 0; }"
+    ".sec-big { font-size: " + str(font_size + 3) + "px; font-weight: 800; color: " + style["time_highlight"] + " !important; }"
+    ".lab-top-bar { background-color: " + style["lab_bg"] + "; color: " + style["lab_text"] + "; border: 2.5px solid " + style["lab_border"] + "; border-top: 8px solid " + style["lab_border"] + "; border-radius: 18px; padding: 20px 18px; margin: 20px 0 12px 0; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }"
+    ".lab-bottom-note { text-align: center; font-size: " + str(font_size - 1) + "px; opacity: 0.85; margin: 10px 0 26px 0; }"
     "</style>"
 )
 st.markdown(css_block, unsafe_allow_html=True)
@@ -458,7 +446,7 @@ with tab_dash:
         )
         st.markdown(c3_html, unsafe_allow_html=True)
 
-    # ================= 整塊獨立色塊投票區：置中 10 秒提示 ＋ 互惠引導 ＋ 雙題 5 點量表 ＋ 可愛動物致謝 =================
+    # ================= 投票區：獨立色塊導引卡 ＋ 雙題 5 點量表 ＋ 可愛動物致謝 =================
     survey_texts = {
         "zh-TW": {
             "badge": "🧪 行為實驗互動區 · 只要 10 秒",
@@ -497,6 +485,7 @@ with tab_dash:
             "submit": "✨ 匿名送出兩題量表",
             "thank_line": "我們謝謝你 😊",
             "thank_sub": "您的匿名作答已記錄（採盲測設計，不公開即時統計；僅供學術探討，非投資建議）。",
+            "end_note": "— 匿名行為實驗區結束，以下為歷史回測數據 —",
         },
         "en": {
             "badge": "🧪 BEHAVIORAL LAB · ONLY 10 SECONDS",
@@ -535,6 +524,7 @@ with tab_dash:
             "submit": "✨ Submit Anonymous Ratings",
             "thank_line": "Thank you 😊",
             "thank_sub": "Your anonymous response has been recorded (blinded design, no live tallies; academic research only, not financial advice).",
+            "end_note": "— End of Anonymous Behavioral Lab —",
         },
         "ja": {
             "badge": "🧪 行動実験エリア · たった 10 秒",
@@ -573,106 +563,100 @@ with tab_dash:
             "submit": "✨ 匿名で5段階評価を送信",
             "thank_line": "ありがとうございます 😊",
             "thank_sub": "匿名回答を記録しました（ブラインド設計のため集計非公開・学術研究目的であり投資助言ではありません）。",
+            "end_note": "— 匿名行動実験エリア終了 —",
         },
     }[selected_lang]
 
     if "voted_in_session" not in st.session_state:
         st.session_state["voted_in_session"] = False
-    if "submitting_lock" not in st.session_state:
-        st.session_state["submitting_lock"] = False
     if "thank_animal" not in st.session_state:
         st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
 
-    with st.container(border=True):
-        st.markdown("<span id='survey-lab-marker' style='display:none;'></span>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='lab-badge-wrap'><span class='lab-badge'>" + survey_texts["badge"] + "</span></div>"
-            "<div class='lab-hero-center'>" + survey_texts["center_10s"] + "</div>",
-            unsafe_allow_html=True,
+    st.markdown(
+        "<div class='lab-top-bar'>"
+        "<div class='lab-badge-wrap'><span class='lab-badge'>" + survey_texts["badge"] + "</span></div>"
+        "<div class='lab-hero-center'>" + survey_texts["center_10s"] + "</div>"
+        "<div style='font-size:" + str(font_size + 4) + "px; font-weight:800; margin:6px 0;'>" + survey_texts["title"] + "</div>"
+        "<div style='text-align:center; margin:4px 0 8px 0;'>" + survey_texts["prompt_lead"] + "</div>"
+        "<div>" + survey_texts["invite"] + "</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.info(survey_texts["pre_ethics"])
+    with st.expander(survey_texts["expander_label"], expanded=False):
+        st.markdown(survey_texts["ethics_detail"])
+
+    if not st.session_state["voted_in_session"]:
+        emo_score = st.radio(
+            survey_texts["q1_label"],
+            options=[1, 2, 3, 4, 5],
+            index=None,
+            format_func=lambda x: survey_texts["q1_opts"][x],
         )
-        st.subheader(survey_texts["title"])
-        st.markdown("<div style='text-align:center;'>" + survey_texts["prompt_lead"] + "</div>", unsafe_allow_html=True)
-        st.write("")
-        st.markdown(survey_texts["invite"])
-        st.info(survey_texts["pre_ethics"])
-        with st.expander(survey_texts["expander_label"], expanded=False):
-            st.markdown(survey_texts["ethics_detail"])
+        act_score = st.radio(
+            survey_texts["q2_label"],
+            options=[1, 2, 3, 4, 5],
+            index=None,
+            format_func=lambda x: survey_texts["q2_opts"][x],
+        )
 
-        if not st.session_state["voted_in_session"]:
-            emo_score = st.radio(
-                survey_texts["q1_label"],
-                options=[1, 2, 3, 4, 5],
-                index=None,
-                format_func=lambda x: survey_texts["q1_opts"][x],
+        agreed = st.checkbox(survey_texts["consent_chk"], value=False)
+        can_submit = (emo_score is not None) and (act_score is not None) and bool(agreed)
+
+        if not can_submit:
+            st.caption(survey_texts["unlock_hint"])
+
+        if st.button(
+            survey_texts["submit"],
+            disabled=not can_submit,
+            type="primary",
+            use_container_width=True,
+        ):
+            emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
+            act_payload = (
+                str(act_score)
+                + " | 126D_Win:"
+                + str(win_rates["126D"]["final_win_rate"])
+                + "% | "
+                + survey_texts["q2_opts"][act_score]
             )
-            act_score = st.radio(
-                survey_texts["q2_label"],
-                options=[1, 2, 3, 4, 5],
-                index=None,
-                format_func=lambda x: survey_texts["q2_opts"][x],
-            )
-
-            agreed = st.checkbox(survey_texts["consent_chk"], value=False)
-            can_submit = (
-                (emo_score is not None)
-                and (act_score is not None)
-                and bool(agreed)
-                and (not st.session_state["submitting_lock"])
-            )
-
-            if not can_submit:
-                st.caption(survey_texts["unlock_hint"])
-
-            if st.button(
-                survey_texts["submit"],
-                disabled=not can_submit,
-                type="primary",
-                use_container_width=True,
-            ):
-                st.session_state["submitting_lock"] = True
-                emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
-                act_payload = (
-                    str(act_score)
-                    + " | 126D_Win:"
-                    + str(win_rates["126D"]["final_win_rate"])
-                    + "% | "
-                    + survey_texts["q2_opts"][act_score]
-                )
-                form_data = {
-                    ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
-                    ENTRY_LANG: str(selected_lang),
-                    ENTRY_CNN: str(cnn["score"]),
-                    ENTRY_VIX: str(vix["vix"]),
-                    ENTRY_AAII: str(aaii["bearish"]),
-                    ENTRY_EMOTION: emo_payload,
-                    ENTRY_ACTION: act_payload,
-                }
-                try:
-                    req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=10)
-                except Exception:
-                    pass
-                st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
-                st.session_state["voted_in_session"] = True
-                st.session_state["submitting_lock"] = False
-                st.rerun()
+            form_data = {
+                ENTRY_UPDATED_AT: str(data.get("updated_at", "")),
+                ENTRY_LANG: str(selected_lang),
+                ENTRY_CNN: str(cnn["score"]),
+                ENTRY_VIX: str(vix["vix"]),
+                ENTRY_AAII: str(aaii["bearish"]),
+                ENTRY_EMOTION: emo_payload,
+                ENTRY_ACTION: act_payload,
+            }
+            try:
+                req_lib.post(GOOGLE_FORM_ACTION_URL, data=form_data, timeout=5)
+            except Exception:
+                pass
+            st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
+            st.session_state["voted_in_session"] = True
+            st.rerun()
+    else:
+        icon_ch, name_zh, name_en, name_ja = st.session_state["thank_animal"]
+        if selected_lang == "zh-TW":
+            animal_label = name_zh
+        elif selected_lang == "en":
+            animal_label = name_en
         else:
-            icon_ch, name_zh, name_en, name_ja = st.session_state["thank_animal"]
-            if selected_lang == "zh-TW":
-                animal_label = name_zh
-            elif selected_lang == "en":
-                animal_label = name_en
-            else:
-                animal_label = name_ja
+            animal_label = name_ja
 
-            st.success(
-                icon_ch
-                + " **"
-                + animal_label
-                + "**："
-                + survey_texts["thank_line"]
-                + "\n\n"
-                + survey_texts["thank_sub"]
-            )
+        st.success(
+            icon_ch
+            + " **"
+            + animal_label
+            + "**："
+            + survey_texts["thank_line"]
+            + "\n\n"
+            + survey_texts["thank_sub"]
+        )
+
+    st.markdown("<div class='lab-bottom-note'>" + survey_texts["end_note"] + "</div>", unsafe_allow_html=True)
 
     st.subheader(t["section_table"])
     cols = t["tbl_cols"]
