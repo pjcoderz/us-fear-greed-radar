@@ -82,8 +82,8 @@ I18N = {
         "tbl_cols": ["持有週期", "綜合勝率", "達 90% 警報", "CNN 勝率", "VIX 勝率", "AAII 加權", "S&P 500 平均報酬", "NASDAQ-100 平均報酬", "歷史樣本數"],
         "yes": "✅ 是",
         "days_unit": " 天",
-        "chart_header": "📈 歷史走勢圖表（點擊切換日線 / 週線）",
-        "chart_modes": ["日線：CNN 恐慌指數 & VIX（每日）", "週線：AAII 散戶看空比例 %（每週）"],
+        "chart_header": "📈 歷史走勢圖表（點擊切換日線 / 三指標週線）",
+        "chart_modes": ["日線：CNN 恐慌指數 & VIX（每日）", "週線：CNN 恐慌 & VIX & AAII 看空比例（每週同框）"],
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -143,8 +143,8 @@ I18N = {
         "tbl_cols": ["Holding Horizon", "Composite Win Rate", "≥ 90% Alert", "CNN Win Rate", "VIX Win Rate", "AAII Bonus", "S&P 500 Avg Return", "NASDAQ-100 Avg Return", "Sample Size"],
         "yes": "✅ Yes",
         "days_unit": " days",
-        "chart_header": "📈 Historical Trend Chart (Switch Daily / Weekly)",
-        "chart_modes": ["Daily: CNN Fear & Greed & VIX", "Weekly: AAII Retail Bearish (%)"],
+        "chart_header": "📈 Historical Trend Chart (Switch Daily / 3-Indicator Weekly)",
+        "chart_modes": ["Daily: CNN Fear & Greed & VIX", "Weekly: CNN & VIX & AAII Bearish (%) Combined"],
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -204,8 +204,8 @@ I18N = {
         "tbl_cols": ["保有期間", "総合勝率", "90%警報", "CNN勝率", "VIX勝率", "AAII補正", "S&P 500 平均リターン", "NASDAQ-100 平均リターン", "サンプル数"],
         "yes": "✅ 達成",
         "days_unit": " 日",
-        "chart_header": "📈 過去の推移チャート（日足 / 週足 切替）",
-        "chart_modes": ["日足：CNN恐怖指数 & VIX（日次）", "週足：AAII 個人投資家弱気比率 %（週次）"],
+        "chart_header": "📈 過去の推移チャート（日足 / 3指標週足 切替）",
+        "chart_modes": ["日足：CNN恐怖指数 & VIX（日次）", "週足：CNN & VIX & AAII 弱気比率（週次3指標同時表示）"],
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -270,9 +270,36 @@ with st.sidebar:
     st.caption(t["sidebar_note"])
 
 THEME_PALETTES = [
-    {"bg": "#FAF8F5", "card": "#FFFFFF", "text": "#1F2937", "border": "#E5E7EB"},
-    {"bg": "#FFFFFF", "card": "#F9FAFB", "text": "#111827", "border": "#E5E7EB"},
-    {"bg": "#0F172A", "card": "#1E293B", "text": "#F8FAFC", "border": "#334155"},
+    {
+        "bg": "#FAF8F5",
+        "card": "#FFFFFF",
+        "text": "#1F2937",
+        "border": "#E5E7EB",
+        "lab_bg": "#EEF2FF",
+        "lab_border": "#4F46E5",
+        "lab_badge_bg": "#4F46E5",
+        "lab_badge_fg": "#FFFFFF",
+    },
+    {
+        "bg": "#FFFFFF",
+        "card": "#F9FAFB",
+        "text": "#111827",
+        "border": "#E5E7EB",
+        "lab_bg": "#F0F9FF",
+        "lab_border": "#0284C7",
+        "lab_badge_bg": "#0284C7",
+        "lab_badge_fg": "#FFFFFF",
+    },
+    {
+        "bg": "#0F172A",
+        "card": "#1E293B",
+        "text": "#F8FAFC",
+        "border": "#334155",
+        "lab_bg": "#1E1B4B",
+        "lab_border": "#818CF8",
+        "lab_badge_bg": "#6366F1",
+        "lab_badge_fg": "#FFFFFF",
+    },
 ]
 style = THEME_PALETTES[theme_idx]
 
@@ -284,6 +311,15 @@ css_block = (
     ".badge-green { background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-yellow { background-color: #FEF9C3; color: #854D0E; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-red { background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
+    ".lab-badge { display: inline-block; background-color: " + style["lab_badge_bg"] + "; color: " + style["lab_badge_fg"] + "; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; letter-spacing: 0.4px; margin-bottom: 6px; }"
+    "div[data-testid='stVerticalBlockBorderWrapper']:has(.lab-anchor) {"
+    "  background-color: " + style["lab_bg"] + " !important;"
+    "  border: 2px solid " + style["lab_border"] + " !important;"
+    "  border-top: 7px solid " + style["lab_border"] + " !important;"
+    "  border-radius: 16px !important;"
+    "  padding: 18px 20px !important;"
+    "  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;"
+    "}"
     "</style>"
 )
 st.markdown(css_block, unsafe_allow_html=True)
@@ -400,13 +436,14 @@ with tab_dash:
         )
         st.markdown(c3_html, unsafe_allow_html=True)
 
-    # ================= 獨立卡片外框：雙題 5 點量表（單一送出按鈕、背景寫入 Google 表單） =================
+    # ================= 高對比色塊投票卡片：互惠感謝引導 ＋ 雙題 5 點量表 ＋ 可愛動物致謝 =================
     st.write("")
     survey_texts = {
         "zh-TW": {
-            "title": "🗳️ 行為實驗：主觀情緒與操作傾向（5 點量表）",
-            "prompt_lead": "看完今日指標了嗎？滑動 10 秒記錄您的真實反應",
-            "invite": "💡 **只需 10 秒，邀請您參與行為財務學匿名小實驗！** 您的真實直覺與反應，能幫助我們更深入理解市場情緒與投資決策。",
+            "badge": "🧪 行為實驗互動區 · 約 10 秒",
+            "title": "🗳️ 順手幫個忙：記錄您此刻的市場直覺（5 點量表）",
+            "prompt_lead": "看完今日指標了嗎？如果這些數據對您有幫助，歡迎花 10 秒順手留下一筆匿名研究紀錄！",
+            "invite": "💡 **您的真實反應對學術研究非常寶貴**——我們正在收集投資人看到恐慌指標與勝率後的第一直覺，完全自由參與、無需登入。",
             "pre_ethics": (
                 "**研究倫理聲明（送出前請閱覽）**：本匿名調查探討檢視美股恐慌指標與歷史勝率後之「反身性」行為反應。"
                 "不收集姓名、Email 或 IP，僅記錄時間戳記、當下指標數值與量表分數；採盲測設計不公開即時票數以防從眾偏誤，僅供學術探討，非投資建議。"
@@ -434,15 +471,16 @@ with tab_dash:
                 5: "5 分 — 傾向積極加碼 / 大幅逆向買進",
             },
             "consent_chk": "我已閱讀上述研究倫理聲明，並同意以完全匿名方式參與本研究",
+            "unlock_hint": "⏳ 請先點選上方兩題選項，並勾選研究倫理同意聲明，即可解鎖送出按鈕。",
             "submit": "✨ 匿名送出兩題量表",
             "thank_line": "我們謝謝你 😊",
             "thank_sub": "您的匿名作答已記錄（採盲測設計，不公開即時統計；僅供學術探討，非投資建議）。",
-            "already": "ℹ️ 您在本次瀏覽中已完成填答，我們謝謝你 😊",
         },
         "en": {
-            "title": "🗳️ Behavioral Experiment: Emotion & Action Tendency (5-Point Scale)",
-            "prompt_lead": "Finished checking today's indicators? Spend 10 seconds recording your genuine reaction.",
-            "invite": "💡 **In just 10 seconds, you are invited to join a short anonymous behavioral finance experiment.** Your genuine intuition helps us better understand market sentiment and investment decisions.",
+            "badge": "🧪 BEHAVIORAL LAB · 10-SEC EXPERIMENT",
+            "title": "🗳️ Quick Favor: Record Your Market Intuition (5-Point Scale)",
+            "prompt_lead": "Found today's indicators helpful? Spend 10 seconds contributing an anonymous data point to our research!",
+            "invite": "💡 **Your genuine reaction is invaluable for academic research.** We study investors' immediate intuition after viewing sentiment and win-rate data—voluntary and no login required.",
             "pre_ethics": (
                 "**Research Ethics Notice (Please Read Before Submitting)**: This anonymous survey examines investor reflexivity after viewing sentiment indicators and win rates. "
                 "No names, emails, or IPs are collected—only timestamps, current indicator values, and scale ratings. Aggregate results remain blinded to prevent herding; for academic research only, not financial advice."
@@ -470,15 +508,16 @@ with tab_dash:
                 5: "5 — Strongly Add / Aggressive Contrarian Buy",
             },
             "consent_chk": "I have read the research ethics notice above and consent to participate anonymously",
+            "unlock_hint": "⏳ Please answer both questions above and check the research ethics consent box to unlock submission.",
             "submit": "✨ Submit Anonymous Ratings",
             "thank_line": "Thank you 😊",
             "thank_sub": "Your anonymous response has been recorded (blinded design, no live tallies; academic research only, not financial advice).",
-            "already": "ℹ️ You have already submitted a response in this session. Thank you 😊",
         },
         "ja": {
-            "title": "🗳️ 行動実験：主観的感情と行動傾向（5段階尺度）",
-            "prompt_lead": "本日の指標はご覧になりましたか？10秒で素直な反応をお聞かせください。",
-            "invite": "💡 **わずか10秒、行動ファイナンスの匿名ミニ実験にご参加ください。** あなたの素直な直感と反応が、市場心理と投資行動の理解に役立ちます。",
+            "badge": "🧪 行動実験エリア · 所要時間 約10秒",
+            "title": "🗳️ 研究へのご協力：現在の直感をお聞かせください（5段階尺度）",
+            "prompt_lead": "本日の指標はお役に立ちましたか？10秒だけお時間をいただき、匿名データの記録にご協力ください！",
+            "invite": "💡 **あなたの素直な反応が学術研究の貴重なデータになります。** 恐怖指数と実証勝率を見た直後の心理を調査しています（任意参加・ログイン不要）。",
             "pre_ethics": (
                 "**研究倫理声明（送信前にお読みください）**：本匿名調査は恐怖指数と実証勝率を閲覧した後の投資家の再帰性（リフレクシビティ）を検証します。"
                 "氏名・メール・IPアドレスは収集せず、タイムスタンプ・指標値・尺度スコアのみを記録します。群集バイアス防止のため集計結果は非公開とし、学術目的のみで投資助言ではありません。"
@@ -506,10 +545,10 @@ with tab_dash:
                 5: "5点 — 積極的に逆張り買い / 大幅買い増し",
             },
             "consent_chk": "上記の研究倫理声明を読み、完全匿名での研究参加に同意します",
+            "unlock_hint": "⏳ 上記2つの質問に回答し、研究倫理声明にチェックを入れると送信ボタンが有効になります。",
             "submit": "✨ 匿名で5段階評価を送信",
             "thank_line": "ありがとうございます 😊",
             "thank_sub": "匿名回答を記録しました（ブラインド設計のため集計非公開・学術研究目的であり投資助言ではありません）。",
-            "already": "ℹ️ このセッションでは既に回答済みです。ありがとうございます 😊",
         },
     }[selected_lang]
 
@@ -519,6 +558,10 @@ with tab_dash:
         st.session_state["thank_animal"] = random.choice(CUTE_ANIMALS)
 
     with st.container(border=True):
+        st.markdown(
+            "<div class='lab-anchor'><span class='lab-badge'>" + survey_texts["badge"] + "</span></div>",
+            unsafe_allow_html=True,
+        )
         st.subheader(survey_texts["title"])
         st.markdown("**" + survey_texts["prompt_lead"] + "**")
         st.markdown(survey_texts["invite"])
@@ -543,7 +586,15 @@ with tab_dash:
             agreed = st.checkbox(survey_texts["consent_chk"], value=False)
             can_submit = (emo_score is not None) and (act_score is not None) and bool(agreed)
 
-            if st.button(survey_texts["submit"], disabled=not can_submit, use_container_width=True):
+            if not can_submit:
+                st.caption(survey_texts["unlock_hint"])
+
+            if st.button(
+                survey_texts["submit"],
+                disabled=not can_submit,
+                type="primary",
+                use_container_width=True,
+            ):
                 emo_payload = str(emo_score) + " | " + survey_texts["q1_opts"][emo_score]
                 act_payload = (
                     str(act_score)
@@ -625,12 +676,13 @@ with tab_dash:
             if daily_cols:
                 st.line_chart(df_hist[daily_cols])
         else:
-            if "AAII_Bearish" in df_hist.columns:
-                df_weekly = df_hist[["AAII_Bearish"]].resample("W-FRI").last().dropna()
+            weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish"] if c in df_hist.columns]
+            if weekly_cols:
+                df_weekly = df_hist[weekly_cols].resample("W-FRI").last().dropna(how="all")
                 if not df_weekly.empty:
                     st.line_chart(df_weekly)
             else:
-                st.info("AAII weekly series pending next GitHub Actions run.")
+                st.info("Weekly series pending next GitHub Actions run.")
 
 with tab_acad:
     st.markdown(t["academic_md"])
