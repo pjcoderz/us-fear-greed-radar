@@ -225,15 +225,26 @@ def fetch_vix_and_benchmarks():
         ndx_s = _fetch_stooq_series("^ndx")
 
     df_mkt = pd.DataFrame({"VIX": vix_s, "SP500": sp_s, "NDX": ndx_s}).dropna(subset=["VIX", "SP500"])
-    if df_mkt["NDX"].isna().all():
+    if df_mkt.empty and os.path.exists(CSV_PATH):
+        try:
+            old_csv = pd.read_csv(CSV_PATH)
+            old_csv["dt"] = pd.to_datetime(old_csv["Date"], errors="coerce")
+            old_csv = old_csv.dropna(subset=["dt"]).set_index("dt").sort_index()
+            if {"VIX", "SP500"}.issubset(old_csv.columns):
+                df_mkt = old_csv[["VIX", "SP500"]].copy()
+                df_mkt["NDX"] = old_csv["NDX"] if "NDX" in old_csv.columns else old_csv["SP500"]
+        except Exception as e:
+            print("[Warn] CSV fallback:", str(e))
+
+    if df_mkt.empty:
+        raise RuntimeError("Market data empty from all sources.")
+
+    if "NDX" not in df_mkt.columns or df_mkt["NDX"].isna().all():
         df_mkt["NDX"] = df_mkt["SP500"]
     else:
         df_mkt["NDX"] = df_mkt["NDX"].ffill().bfill()
 
     df_mkt = df_mkt.sort_index()
-    if df_mkt.empty:
-        raise RuntimeError("Market data empty from both sources.")
-
     vix_now = round(float(df_mkt["VIX"].iloc[-1]), 2)
     vix_prev = round(float(df_mkt["VIX"].iloc[-2]), 2) if len(df_mkt) >= 2 else vix_now
     sp500_now = round(float(df_mkt["SP500"].iloc[-1]), 2)
@@ -244,6 +255,7 @@ def fetch_vix_and_benchmarks():
 def fetch_aaii_data():
     url = "https://www.aaii.com/sentimentsurvey/sent_results"
     resp = safe_request(url)
+    hist_records = []
 
     if resp:
         try:
@@ -260,15 +272,27 @@ def fetch_aaii_data():
                                 pct_nums.append(parsed)
                     if len(pct_nums) >= 3:
                         bullish, neutral, bearish = pct_nums[0], pct_nums[1], pct_nums[2]
-                        return {
+                        hist_records.append({
                             "date": vals[0] if vals else "Latest",
                             "bullish": bullish,
                             "neutral": neutral,
                             "bearish": bearish,
                             "spread": round(bullish - bearish, 2),
-                        }
+                        })
         except Exception as e:
             print("[Warn] AAII HTML:", str(e))
+
+    if hist_records:
+        df_aaii_hist = pd.DataFrame(hist_records)
+        df_aaii_hist["Date"] = pd.to_datetime(df_aaii_hist["date"], errors="coerce").dt.normalize()
+        df_aaii_hist = (
+            df_aaii_hist.dropna(subset=["Date"])
+            .drop_duplicates(subset=["Date"], keep="first")
+            .sort_values("Date")
+            .set_index("Date")
+        )
+        if not df_aaii_hist.empty:
+            return hist_records[0], df_aaii_hist[["bearish"]].rename(columns={"bearish": "AAII_Bearish"})
 
     backup_urls = [
         "https://raw.githubusercontent.com/datasets/aaii-sentiment/main/data/aaii-sentiment.csv",
@@ -279,6 +303,16 @@ def fetch_aaii_data():
             try:
                 bdf = pd.read_csv(StringIO(b_resp.text)).dropna(how="all")
                 if not bdf.empty:
+                    date_col = bdf.columns[0]
+                    bdf["Date"] = pd.to_datetime(bdf[date_col], errors="coerce").dt.normalize()
+                    b_col = "Bearish" if "Bearish" in bdf.columns else bdf.columns[3]
+                    bdf["AAII_Bearish"] = bdf[b_col].apply(lambda x: _parse_float(x, 0, 100))
+                    bdf_clean = (
+                        bdf.dropna(subset=["Date", "AAII_Bearish"])
+                        .sort_values("Date")
+                        .set_index("Date")
+                    )
+
                     last = bdf.iloc[-1]
                     bullish = _parse_float(
                         last.get("Bullish", last.iloc[1] if len(last) > 1 else None), 0, 100
@@ -292,17 +326,18 @@ def fetch_aaii_data():
                     if bullish is not None and bearish is not None:
                         if neutral is None:
                             neutral = round(max(0.0, 100.0 - bullish - bearish), 2)
-                        return {
+                        latest_obj = {
                             "date": str(last.iloc[0]),
                             "bullish": bullish,
                             "neutral": neutral,
                             "bearish": bearish,
                             "spread": round(bullish - bearish, 2),
                         }
+                        return latest_obj, bdf_clean[["AAII_Bearish"]]
             except Exception as e:
                 print("[Warn] AAII backup:", str(e))
 
-    return None
+    return None, pd.DataFrame(columns=["AAII_Bearish"])
 
 
 def evaluate_lights(cnn_score, vix_val, aaii_bearish):
@@ -318,13 +353,19 @@ def evaluate_lights(cnn_score, vix_val, aaii_bearish):
     }
 
 
-def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt):
+def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, df_aaii_hist):
     if df_cnn is not None and not df_cnn.empty:
         df = df_mkt.join(df_cnn, how="left")
-        df["CNN_FG"] = df["CNN_FG"].ffill().fillna(cnn_now)
+        df["CNN_FG"] = df["CNN_FG"].ffill().bfill().fillna(cnn_now)
     else:
         df = df_mkt.copy()
         df["CNN_FG"] = cnn_now
+
+    if df_aaii_hist is not None and not df_aaii_hist.empty:
+        df = df.join(df_aaii_hist, how="left")
+        df["AAII_Bearish"] = df["AAII_Bearish"].ffill().bfill().fillna(aaii_now["bearish"])
+    else:
+        df["AAII_Bearish"] = aaii_now["bearish"]
 
     horizon_days = {"21D": 21, "63D": 63, "126D": 126, "252D": 252}
 
@@ -407,7 +448,7 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt):
     recent_hist = df.tail(365).reset_index()
     date_col = recent_hist.columns[0]
     recent_hist["Date"] = pd.to_datetime(recent_hist[date_col]).dt.strftime("%Y-%m-%d")
-    return results, recent_hist[["Date", "CNN_FG", "VIX", "SP500", "NDX"]]
+    return results, recent_hist[["Date", "CNN_FG", "VIX", "AAII_Bearish", "SP500", "NDX"]]
 
 
 def send_alert_email(payload):
@@ -469,7 +510,7 @@ def main():
 
     cnn_info, df_cnn = fetch_cnn_data()
     vix_info, df_mkt = fetch_vix_and_benchmarks()
-    aaii_info = fetch_aaii_data()
+    aaii_info, df_aaii_hist = fetch_aaii_data()
 
     if not aaii_info:
         if "aaii" in old_payload and isinstance(old_payload["aaii"], dict):
@@ -486,7 +527,7 @@ def main():
 
     lights = evaluate_lights(cnn_info["score"], vix_info["vix"], aaii_info["bearish"])
     win_rates, recent_hist = compute_multi_horizon_winrates(
-        cnn_info["score"], vix_info["vix"], aaii_info, df_cnn, df_mkt
+        cnn_info["score"], vix_info["vix"], aaii_info, df_cnn, df_mkt, df_aaii_hist
     )
 
     utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
