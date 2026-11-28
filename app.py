@@ -2,8 +2,10 @@ import io
 import json
 import os
 import random
+import urllib.parse
 import altair as alt
 import pandas as pd
+import qrcode
 import requests as req_lib
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
@@ -18,9 +20,10 @@ st.set_page_config(
 JSON_PATH = os.path.join("data", "sentiment_data.json")
 CSV_PATH = os.path.join("data", "history_backtest.csv")
 COUNTER_PATH = os.path.join("data", "visitor_count.txt")
+AUDIO_PATH = os.path.join("data", "daily_brief.mp3")
 
 GITHUB_REPO_URL = "https://github.com/pjcoderz/us-fear-greed-radar"
-APP_PUBLIC_URL = "https://us-fear-greed-radar.streamlit.app"
+APP_BRIEF_URL = "https://us-fear-greed-radar.streamlit.app/?view=brief"
 
 # 請將下方 8 行替換為執行 Google Apps Script 後「執行紀錄」印出的實際內容
 GOOGLE_FORM_ACTION_URL = "https://docs.google.com/forms/d/e/YOUR_FORM_ID/formResponse"
@@ -55,8 +58,8 @@ I18N = {
         "github_btn": "💻 GitHub 專案原始碼",
         "contact_desc": "本系統僅供行為財務學與投資情緒研究探討（開發者：pjcoderz）。",
         "meta_line": "資料更新：{updated} ｜ 累積瀏覽人次：{visitors:,} ｜ 寄信警報門檻：≥ {threshold}%",
-        "tab_dashboard": "📊 客觀指標與行為實驗",
-        "tab_brief": "🎧 戰情快報與炫耀圖卡",
+        "tab_dashboard": "📊 即時指標與勝率儀表板",
+        "tab_brief": "⚡ 點這裡直接看結論",
         "tab_academic": "📚 學術理論基礎與參考文獻",
         "horizon_prompt": "選擇實證回測持有週期：",
         "horizons": {
@@ -111,21 +114,14 @@ I18N = {
         "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
         "bench_caption": "純背景基準參考圖層（不參與情緒燈號運算），可垂直對照上方情緒未亮燈時的緩跌與三燈齊亮時的位置。",
         "bench_pending": "⏳ 平行指數收盤序列將於下一次 GitHub Actions 更新後顯示。",
-        # 戰情快報與炫耀圖卡分頁文案
-        "brief_header": "🎧 今日逆向戰情快報與炫耀圖卡",
-        "brief_sub": "專為想快速掌握結論、聽白話解說，或把專業數據分享到社群／群組的你設計（不影響主頁行為實驗）。",
-        "brief_verdict_0": "🔴 市場情緒冷靜（0 / 3 綠燈）｜目前尚未出現極端恐慌訊號，維持原有配置與紀律，不追高也不急著逆向抄底。",
-        "brief_verdict_1": "🟡 單燈初亮觀察期（1 / 3 綠燈）｜局部情緒開始繃緊但尚未共振，適合列為觀察名單、保留現金彈性。",
-        "brief_verdict_2": "🟠 雙燈警戒累積期（2 / 3 綠燈）｜恐慌已經在兩項指標顯現，歷史上常處於波段震盪或探底階段，適合小額分批、不急著一次重壓。",
-        "brief_verdict_3": "🟢 三燈全面共振期（3 / 3 綠燈）｜CNN、VIX 與 AAII 散戶看空同步跨過恐慌門檻，歷史上多屬中長線均值回歸高勝率區間，建議分批布局並拉長持有視角。",
-        "brief_script_title": "🎙️ 今日 60 秒白話解說稿（可直接貼進 TTS 轉語音或快速朗讀）",
-        "brief_audio_note": "💡 語音自動生成模組預留位：後續可在 GitHub Actions 自動把下方稿件轉成每日 MP3 音檔在這裡播放。",
-        "brief_card_title": "🖼️ 一鍵下載「炫耀用戰情圖卡」（PNG）",
-        "brief_card_desc": "高對比深色機構風格卡片，適合直接存圖發在 Threads、X、IG 限動或投資群組。",
-        "brief_download_btn": "⬇️ 一鍵下載今日戰情圖卡 (PNG)",
-        "brief_copy_title": "📋 一鍵複製今日專業短評（點右上角複製圖示即可貼上）",
-        "brief_nudge_title": "🧪 對行為財務學盲測實驗有興趣嗎？",
-        "brief_nudge_desc": "主頁提供「客觀指標＋10 秒匿名盲測投票」，歡迎切換回「📊 客觀指標與行為實驗」分頁參與研究。",
+        # 分頁二：等燈燈懶人包與分享圖卡
+        "brief_title": "🚦 等燈燈｜美股逆向情緒雷達快報",
+        "brief_audio_title": "🔊 聽 1 分鐘「登、登、登」語音結論",
+        "brief_audio_pending": "⏳ 語音檔將於下一次 GitHub Actions 更新時自動產生，下方先為您呈現今日 1 分鐘語音播報內容：",
+        "brief_download_btn": "⬇️ 一鍵下載戰情圖卡 (PNG 存檔檢驗)",
+        "brief_share_line": "💬 分享至 LINE",
+        "brief_share_x": "𝕏 分享至 X / Twitter",
+        "brief_copy_title": "📋 一鍵複製社群貼文（Threads / FB / 小紅書可直接貼上）",
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -154,8 +150,8 @@ I18N = {
         "github_btn": "💻 GitHub Repository",
         "contact_desc": "Academic and educational dashboard on behavioral sentiment and return reversals (Author: pjcoderz).",
         "meta_line": "Updated: {updated} ｜ Visitors: {visitors:,} ｜ Email Alert Threshold: ≥ {threshold}%",
-        "tab_dashboard": "📊 Objective Signals & Lab",
-        "tab_brief": "🎧 Daily Brief & Share Card",
+        "tab_dashboard": "📊 Live Sentiment & Win-Rate Dashboard",
+        "tab_brief": "⚡ Quick Takeaway & Card",
         "tab_academic": "📚 Academic Foundations & Literature",
         "horizon_prompt": "Select Forward Holding Horizon:",
         "horizons": {
@@ -210,20 +206,13 @@ I18N = {
         "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
         "bench_caption": "Pure background price reference layer (excluded from sentiment signal logic) for post-survey visual comparison.",
         "bench_pending": "⏳ Parallel index price series will appear after the next GitHub Actions run.",
-        "brief_header": "🎧 Today's Contrarian Brief & Shareable Card",
-        "brief_sub": "Built for quick takeaways, spoken summaries, and sharing structured data on social feeds—kept separate from the main experiment tab.",
-        "brief_verdict_0": "🔴 Calm Sentiment (0 / 3 Green) ｜ No extreme fear trigger yet; stick to your baseline plan rather than chasing or forcing contrarian buys.",
-        "brief_verdict_1": "🟡 Early Watch (1 / 3 Green) ｜ Pockets of caution are emerging without broad alignment; keep dry powder and monitor.",
-        "brief_verdict_2": "🟠 Dual-Light Accumulation (2 / 3 Green) ｜ Two fear thresholds are active; historically often choppy or mid-drawdown—scaled entries beat all-in bets.",
-        "brief_verdict_3": "🟢 Triple-Light Alignment (3 / 3 Green) ｜ CNN Fear, VIX, and AAII Bearishness are all above threshold—historically aligned with multi-month mean reversion.",
-        "brief_script_title": "🎙️ 60-Second Spoken Brief Script",
-        "brief_audio_note": "💡 Audio pipeline slot: ready for automated daily MP3 generation in GitHub Actions.",
-        "brief_card_title": "🖼️ Download Shareable Radar Card (PNG)",
-        "brief_card_desc": "Clean high-contrast card ready for Threads, X, Stories, or group chats.",
-        "brief_download_btn": "⬇️ Download Today's Radar Card (PNG)",
-        "brief_copy_title": "📋 Ready-to-Post Commentary (Use top-right copy icon)",
-        "brief_nudge_title": "🧪 Curious about the behavioral finance blind test?",
-        "brief_nudge_desc": "Switch to the 'Objective Signals & Lab' tab for raw indicators and a 10-second anonymous intuition check.",
+        "brief_title": "🚦 Deng-Deng-Deng | US Contrarian Sentiment Brief",
+        "brief_audio_title": "🔊 Play 1-Min Audio Brief",
+        "brief_audio_pending": "⏳ Audio MP3 will be generated on the next GitHub Actions run. Here is today's 1-minute brief:",
+        "brief_download_btn": "⬇️ Download Radar Card (PNG)",
+        "brief_share_line": "💬 Share to LINE",
+        "brief_share_x": "𝕏 Share to X",
+        "brief_copy_title": "📋 Copy Social Caption (Threads / FB / X)",
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -252,8 +241,8 @@ I18N = {
         "github_btn": "💻 GitHub リポジトリ",
         "contact_desc": "行動ファイナンスと投資心理の学術・教育向けダッシュボードです（開発者：pjcoderz）。",
         "meta_line": "最終更新：{updated} ｜ 累計訪問者数：{visitors:,} ｜ メール通知閾値：≥ {threshold}%",
-        "tab_dashboard": "📊 客観指標・行動実験",
-        "tab_brief": "🎧 戦情ブリーフ・シェア画像",
+        "tab_dashboard": "📊 リアルタイム指標・勝率ダッシュボード",
+        "tab_brief": "⚡ 結論だけすぐ見る",
         "tab_academic": "📚 学術的根拠・参考文献",
         "horizon_prompt": "実証バックテストの保有期間を選択：",
         "horizons": {
@@ -307,20 +296,13 @@ I18N = {
         "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
         "bench_caption": "センチメント判定には含めない純粋な背景参照チャートです。",
         "bench_pending": "⏳ 次回の GitHub Actions 実行後に平行株価データが表示されます。",
-        "brief_header": "🎧 本日の逆張りブリーフ・シェア画像",
-        "brief_sub": "結論の把握やSNSシェア向けに特化したページです（メインの行動実験タブとは分離しています）。",
-        "brief_verdict_0": "🔴 市場心理は落ち着き圏（0 / 3 点灯）｜極端な恐怖シグナルはなく、基本方針を維持するフェーズです。",
-        "brief_verdict_1": "🟡 1灯点灯の警戒初期（1 / 3 点灯）｜一部の指標に緊張感が見られますが、まだ全面的な逆張り水準ではありません。",
-        "brief_verdict_2": "🟠 2灯点灯の蓄積フェーズ（2 / 3 点灯）｜恐怖が2指標で顕在化。一度に全力よりも分割対応が向く局面です。",
-        "brief_verdict_3": "🟢 3灯一斉点灯の極端局面（3 / 3 点灯）｜主要3指標が恐怖閾値を超過。中長期の平均回帰が意識される水準です。",
-        "brief_script_title": "🎙️ 60秒ブリーフ原稿",
-        "brief_audio_note": "💡 音声パイプライン枠：GitHub Actions での自動 MP3 生成と連携可能です。",
-        "brief_card_title": "🖼️ シェア用レーダー画像（PNG）をダウンロード",
-        "brief_card_desc": "Threads・X・ストーリーズ・グループ共有にそのまま使える高コントラスト画像です。",
-        "brief_download_btn": "⬇️ 本日のシェア画像 (PNG) をダウンロード",
-        "brief_copy_title": "📋 シェア用コメント（右上アイコンでコピー可能）",
-        "brief_nudge_title": "🧪 行動ファイナンスのブラインド実験に参加しませんか？",
-        "brief_nudge_desc": "メインタブでは客観指標と10秒の匿名直感チェックを実施しています。",
+        "brief_title": "🚦 等燈燈｜米国株逆張りセンチメント速報",
+        "brief_audio_title": "🔊 1分で結論を聴く（音声ブリーフ）",
+        "brief_audio_pending": "⏳ 次回の GitHub Actions 実行後に音声 MP3 が生成されます。",
+        "brief_download_btn": "⬇️ 戦情カード (PNG) をダウンロード",
+        "brief_share_line": "💬 LINE でシェア",
+        "brief_share_x": "𝕏 X でシェア",
+        "brief_copy_title": "📋 SNS投稿用テキストをコピー",
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -390,96 +372,15 @@ def compute_extremes_summary(df_hist, cnn_val, vix_val, aaii_val):
     return summary
 
 
-def get_verdict_text(t_dict, green_count):
-    if green_count >= 3:
-        return t_dict["brief_verdict_3"]
-    if green_count == 2:
-        return t_dict["brief_verdict_2"]
-    if green_count == 1:
-        return t_dict["brief_verdict_1"]
-    return t_dict["brief_verdict_0"]
-
-
-def build_spoken_script(lang_code, data, h_code):
-    cnn = data["cnn"]
-    vix = data["vix"]
-    aaii = data["aaii"]
-    lights = data["lights"]
-    stat = data["win_rates"][h_code]
-    sp_dd = data.get("sp500", {}).get("drawdown_pct", 0.0)
-    g_cnt = lights["green_count"]
-
-    if lang_code == "en":
-        return (
-            f"US Sentiment Radar update for {data.get('updated_at', '')}. "
-            f"We currently have {g_cnt} out of 3 contrarian green lights active. "
-            f"CNN Fear and Greed stands at {cnn['score']}, CBOE VIX is at {vix['vix']}, "
-            f"and AAII retail bearishness is {aaii['bearish']} percent. "
-            f"S&P 500 sits {sp_dd:+.2f} percent from its all-time high. "
-            f"Over a {h_code} horizon, historical analogous win rate is {stat['final_win_rate']} percent "
-            f"with an average S&P 500 return of {stat['sp_avg_ret']:+.2f} percent. "
-            f"Research illustration only, not financial advice."
-        )
-    if lang_code == "ja":
-        return (
-            f"{data.get('updated_at', '')}時点の米国株センチメントレーダーです。"
-            f"逆張り緑シグナルは3指標中{g_cnt}灯点灯しています。"
-            f"CNN恐怖強欲指数は{cnn['score']}、VIXは{vix['vix']}、AAII個人弱気比率は{aaii['bearish']}%です。"
-            f"S&P 500は高値から{sp_dd:+.2f}%の位置にあり、{h_code}保有の実証勝率は{stat['final_win_rate']}%、"
-            f"平均リターンは{stat['sp_avg_ret']:+.2f}%です。投資助言ではなく学術・研究目的の情報です。"
-        )
-    return (
-        f"【{data.get('updated_at', '')} 美股逆向恐慌雷達快報】\n"
-        f"目前三大情緒指標共亮起 {g_cnt} 顆逆向買點綠燈：\n"
-        f"• CNN 恐慌與貪婪指數：{cnn['score']}（{cnn['rating']}）\n"
-        f"• CBOE VIX 波動率指數：{vix['vix']}（門檻 ≥ 30）\n"
-        f"• AAII 散戶看空比例：{aaii['bearish']}%（門檻 ≥ 50%）\n"
-        f"• S&P 500 距歷史前高回檔：{sp_dd:+.2f}%\n"
-        f"以 {h_code} 持有週期來看，歷史相似條件勝率為 {stat['final_win_rate']}%，"
-        f"S&P 500 歷史平均報酬為 {stat['sp_avg_ret']:+.2f}%。\n"
-        f"（僅供行為財務學研究與資訊參考，非投資建議。）"
-    )
-
-
-def build_share_commentary(lang_code, data, h_code):
-    cnn = data["cnn"]
-    vix = data["vix"]
-    aaii = data["aaii"]
-    lights = data["lights"]
-    stat = data["win_rates"][h_code]
-    sp_dd = data.get("sp500", {}).get("drawdown_pct", 0.0)
-    g_cnt = lights["green_count"]
-
-    if lang_code == "en":
-        return (
-            f"US Sentiment Radar ({g_cnt}/3 Green Lights)\n"
-            f"• CNN F&G: {cnn['score']} | VIX: {vix['vix']} | AAII Bearish: {aaii['bearish']}%\n"
-            f"• S&P 500 vs ATH: {sp_dd:+.2f}% | {h_code} Win Rate: {stat['final_win_rate']}% (Avg: {stat['sp_avg_ret']:+.2f}%)\n"
-            f"Data over noise. {APP_PUBLIC_URL} (Research only, not financial advice.)"
-        )
-    if lang_code == "ja":
-        return (
-            f"米国株センチメントレーダー（{g_cnt}/3 緑点灯）\n"
-            f"• CNN F&G：{cnn['score']} / VIX：{vix['vix']} / AAII弱気：{aaii['bearish']}%\n"
-            f"• S&P500高値比：{sp_dd:+.2f}% / {h_code}勝率：{stat['final_win_rate']}%（平均 {stat['sp_avg_ret']:+.2f}%）\n"
-            f"感情よりデータで冷静に確認。{APP_PUBLIC_URL}（投資助言ではありません）"
-        )
-    return (
-        f"今日美股恐慌雷達（{g_cnt} / 3 綠燈）\n"
-        f"• CNN 恐慌貪婪：{cnn['score']}｜VIX：{vix['vix']}｜AAII 看空：{aaii['bearish']}%\n"
-        f"• S&P 500 距前高：{sp_dd:+.2f}%｜{h_code} 歷史勝率：{stat['final_win_rate']}%（平均 {stat['sp_avg_ret']:+.2f}%）\n"
-        f"市場雜訊很多，先看客觀情緒與歷史機率再決定節奏。{APP_PUBLIC_URL}\n"
-        f"#行為財務學 #美股 #VIX #逆向投資 #量化觀察（非投資建議）"
-    )
-
-
-def load_pil_font(size):
+def load_cjk_font(size):
     candidates = [
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJKtc-Bold.otf",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "C:/Windows/Fonts/msjhbd.ttc",
-        "C:/Windows/Fonts/arialbd.ttf",
+        "/System/Library/Fonts/PingFang.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -490,99 +391,177 @@ def load_pil_font(size):
     return ImageFont.load_default()
 
 
-def generate_radar_share_png(data, h_code):
-    """生成一張 1080x1350 (4:5 社群友善比例) 的深色機構風格戰情圖卡 PNG"""
-    w, h = 1080, 1350
-    img = Image.new("RGB", (w, h), color="#0B1120")
+def generate_dengdengdeng_poster_png(data):
+    """生成 3:4 (1080x1440) 米白黑框＋亮黃螢光筆記風爆款圖卡（固定鎖定 6 個月 126D）"""
+    w, h = 1080, 1440
+    cream_bg = "#FAF6EE"
+    card_bg = "#FFFDF9"
+    ink = "#111111"
+    neon_yellow = "#F7FF00"
+    green_pill = "#4ADE80"
+    yellow_pill = "#FACC15"
+    red_pill = "#F87171"
+
+    img = Image.new("RGB", (w, h), color=cream_bg)
     draw = ImageDraw.Draw(img)
 
-    # 頂部裝飾色帶
-    lights = data["lights"]
-    g_cnt = lights["green_count"]
-    accent = "#22C55E" if g_cnt >= 3 else ("#F59E0B" if g_cnt == 2 else "#38BDF8")
-    draw.rectangle([0, 0, w, 14], fill=accent)
-
-    f_tag = load_pil_font(26)
-    f_title = load_pil_font(46)
-    f_sub = load_pil_font(26)
-    f_hero = load_pil_font(92)
-    f_card_lbl = load_pil_font(26)
-    f_card_val = load_pil_font(44)
-    f_small = load_pil_font(22)
+    f_pill = load_cjk_font(28)
+    f_h1 = load_cjk_font(66)
+    f_mega = load_cjk_font(124)
+    f_sub_bold = load_cjk_font(34)
+    f_status = load_cjk_font(32)
+    f_card_lbl = load_cjk_font(30)
+    f_card_val = load_cjk_font(62)
+    f_card_tag = load_cjk_font(28)
+    f_slogan = load_cjk_font(36)
+    f_footer_title = load_cjk_font(32)
+    f_footer_sub = load_cjk_font(23)
 
     cnn = data["cnn"]
     vix = data["vix"]
     aaii = data["aaii"]
-    stat = data["win_rates"][h_code]
+    lights = data["lights"]
+    stat_126 = data["win_rates"]["126D"]
+    win_pct = f"{stat_126['final_win_rate']:.1f}%"
+    g_cnt = lights["green_count"]
     sp_dd = data.get("sp500", {}).get("drawdown_pct", 0.0)
-    updated_at = str(data.get("updated_at", ""))
+    date_only = str(data.get("updated_at", "")).split(" ")[0]
 
-    # 標題區
-    draw.text((70, 56), "BEHAVIORAL SENTIMENT RADAR", font=f_tag, fill=accent)
-    draw.text((70, 98), "US Contrarian Panic & Win-Rate Brief", font=f_title, fill="#F8FAFC")
-    draw.text((70, 158), f"Updated: {updated_at}   |   Horizon: {h_code}", font=f_sub, fill="#94A3B8")
+    # 1. 頂部膠囊標籤（含明確日期）
+    top_text = f"等燈燈｜美股逆向情緒雷達 · 日期 {date_only}"
+    tb = draw.textbbox((0, 0), top_text, font=f_pill)
+    tw = tb[2] - tb[0]
+    pill_w = tw + 68
+    pill_x0 = (w - pill_w) // 2
+    draw.rounded_rectangle([pill_x0, 44, pill_x0 + pill_w, 104], radius=30, fill=card_bg, outline=ink, width=4)
+    draw.text((pill_x0 + 34, 56), top_text, font=f_pill, fill=ink)
 
-    draw.line([(70, 210), (w - 70, 210)], fill="#1E293B", width=2)
+    # 2. 主標題兩行（第一行：【美股恐慌掃描】，第二行另起：6 個月歷史勝率 XX.X%）
+    line1 = "【美股恐慌掃描】"
+    line2 = f"6 個月歷史勝率 {win_pct}"
 
-    # 核心勝率大卡
-    draw.rounded_rectangle([70, 245, w - 70, 545], radius=24, fill="#111827", outline="#1E293B", width=2)
-    draw.text((110, 278), f"HISTORICAL WIN RATE ({h_code})", font=f_card_lbl, fill="#94A3B8")
-    draw.text((110, 325), f"{stat['final_win_rate']}%", font=f_hero, fill=accent)
-    draw.text(
-        (110, 445),
-        f"Green Lights: {g_cnt} / 3   |   Avg S&P 500: {stat['sp_avg_ret']:+.2f}%   |   S&P vs ATH: {sp_dd:+.2f}%",
-        font=f_sub,
-        fill="#E2E8F0",
-    )
+    b1 = draw.textbbox((0, 0), line1, font=f_h1)
+    w1 = b1[2] - b1[0]
+    x1 = (w - w1) // 2
+    draw.rectangle([x1 - 16, 152, x1 + w1 + 16, 214], fill=neon_yellow)
+    draw.text((x1, 134), line1, font=f_h1, fill=ink)
 
-    # 三大指標卡片區
+    b2 = draw.textbbox((0, 0), line2, font=f_h1)
+    w2 = b2[2] - b2[0]
+    x2 = (w - w2) // 2
+    draw.rectangle([x2 - 16, 248, x2 + w2 + 16, 310], fill=neon_yellow)
+    draw.text((x2, 230), line2, font=f_h1, fill=ink)
+
+    # 3. 中央巨無霸核心數字便當盒（帶粗黑立體陰影）
+    mx0, my0, mx1, my1 = 64, 355, w - 64, 675
+    draw.rounded_rectangle([mx0 + 10, my0 + 10, mx1 + 10, my1 + 10], radius=28, fill=ink)
+    draw.rounded_rectangle([mx0, my0, mx1, my1], radius=28, fill=card_bg, outline=ink, width=5)
+
+    draw.text((112, 388), win_pct, font=f_mega, fill=ink)
+    draw.text((185, 558), "6 個月歷史勝率", font=f_sub_bold, fill=ink)
+
+    status_map = {
+        0: ("情緒冷靜：0 / 3 綠燈", "#E5E7EB"),
+        1: ("警戒累積：1 / 3 綠燈", neon_yellow),
+        2: ("雙燈警戒：2 / 3 綠燈", yellow_pill),
+        3: ("三燈齊亮：3 / 3 綠燈", green_pill),
+    }
+    st_text, st_bg = status_map.get(g_cnt, ("警戒累積：1 / 3 綠燈", neon_yellow))
+    sb = draw.textbbox((0, 0), st_text, font=f_status)
+    sw = sb[2] - sb[0] + 64
+    sx0 = mx1 - 44 - sw
+    draw.rounded_rectangle([sx0, 415, mx1 - 44, 488], radius=36, fill=st_bg, outline=ink, width=4)
+    draw.ellipse([sx0 + 22, 439, sx0 + 46, 463], fill=green_pill if g_cnt > 0 else "#9CA3AF", outline=ink, width=3)
+    draw.text((sx0 + 56, 431), st_text, font=f_status, fill=ink)
+
+    dd_str = f"S&P 500 距前高 {sp_dd:+.1f}%"
+    db = draw.textbbox((0, 0), dd_str, font=f_sub_bold)
+    draw.text((mx1 - 48 - (db[2] - db[0]), 535), dd_str, font=f_sub_bold, fill=ink)
+
+    # 4. 中下三格粗黑框便當盒（CNN / VIX / AAII）
+    cnn_tag = "極度恐慌" if lights["cnn_level"] == "green" else ("恐慌觀察" if lights["cnn_level"] == "yellow" else "中性貪婪")
+    vix_tag = "恐慌噴出" if lights["vix_level"] == "green" else ("波動升溫" if lights["vix_level"] == "yellow" else "市場平靜")
+    aaii_tag = "散戶投降" if lights["aaii_level"] == "green" else ("散戶偏空" if lights["aaii_level"] == "yellow" else "偏多中性")
+
+    level_bg = {"green": green_pill, "yellow": neon_yellow, "red": red_pill}
     cards = [
-        ("CNN FEAR & GREED", f"{cnn['score']} / 100", lights["cnn_level"].upper()),
-        ("CBOE VIX INDEX", f"{vix['vix']}", lights["vix_level"].upper()),
-        ("AAII BEARISH %", f"{aaii['bearish']}%", lights["aaii_level"].upper()),
+        ("CNN 恐慌貪婪", f"{cnn['score']:.1f}", cnn_tag, level_bg[lights["cnn_level"]]),
+        ("CBOE VIX", f"{vix['vix']:.1f}", vix_tag, level_bg[lights["vix_level"]]),
+        ("AAII 散戶看空", f"{aaii['bearish']:.1f}%", aaii_tag, level_bg[lights["aaii_level"]]),
     ]
-    box_w = (w - 140 - 40) // 3
-    for idx, (lbl, val_str, st_str) in enumerate(cards):
-        x0 = 70 + idx * (box_w + 20)
-        x1 = x0 + box_w
-        y0, y1 = 590, 860
-        dot_color = "#22C55E" if st_str == "GREEN" else ("#EAB308" if st_str == "YELLOW" else "#EF4444")
-        draw.rounded_rectangle([x0, y0, x1, y1], radius=20, fill="#111827", outline="#1E293B", width=2)
-        draw.ellipse([x0 + 24, y0 + 28, x0 + 44, y0 + 48], fill=dot_color)
-        draw.text((x0 + 58, y0 + 22), st_str, font=f_small, fill=dot_color)
-        draw.text((x0 + 24, y0 + 78), lbl, font=f_small, fill="#94A3B8")
-        draw.text((x0 + 24, y0 + 130), val_str, font=f_card_val, fill="#F8FAFC")
 
-    # 底部行為財務學提示卡
-    draw.rounded_rectangle([70, 905, w - 70, 1145], radius=24, fill="#111827", outline="#1E293B", width=2)
-    draw.text((110, 940), "CONTRARIAN DISCIPLINE", font=f_card_lbl, fill=accent)
-    draw.text(
-        (110, 992),
-        "Extreme pessimism often precedes mean reversion,",
-        font=f_sub,
-        fill="#F1F5F9",
-    )
-    draw.text(
-        (110, 1034),
-        "but multi-light alignment & staged sizing beat all-in timing.",
-        font=f_sub,
-        fill="#CBD5E1",
-    )
+    gap = 24
+    cw = (w - 128 - gap * 2) // 3
+    cy0, cy1 = 710, 1055
+    for idx, (c_title, c_val, c_tag, c_pill_bg) in enumerate(cards):
+        cx0 = 64 + idx * (cw + gap)
+        cx1 = cx0 + cw
+        draw.rounded_rectangle([cx0 + 8, cy0 + 8, cx1 + 8, cy1 + 8], radius=24, fill=ink)
+        draw.rounded_rectangle([cx0, cy0, cx1, cy1], radius=24, fill=card_bg, outline=ink, width=5)
 
-    # 頁尾
-    draw.line([(70, 1200), (w - 70, 1200)], fill="#1E293B", width=2)
-    draw.text((70, 1230), APP_PUBLIC_URL, font=f_sub, fill="#94A3B8")
-    draw.text(
-        (70, 1272),
-        "Research & educational illustration only. Not financial advice.",
-        font=f_small,
-        fill="#64748B",
-    )
+        b_lbl = draw.textbbox((0, 0), c_title, font=f_card_lbl)
+        draw.text((cx0 + (cw - (b_lbl[2] - b_lbl[0])) // 2, cy0 + 34), c_title, font=f_card_lbl, fill=ink)
+
+        b_val = draw.textbbox((0, 0), c_val, font=f_card_val)
+        draw.text((cx0 + (cw - (b_val[2] - b_val[0])) // 2, cy0 + 132), c_val, font=f_card_val, fill=ink)
+
+        b_tag = draw.textbbox((0, 0), c_tag, font=f_card_tag)
+        pw = (b_tag[2] - b_tag[0]) + 46
+        px0 = cx0 + (cw - pw) // 2
+        draw.rounded_rectangle([px0, cy0 + 250, px0 + pw, cy0 + 306], radius=28, fill=c_pill_bg, outline=ink, width=4)
+        draw.text((px0 + 23, cy0 + 260), c_tag, font=f_card_tag, fill=ink)
+
+    # 5. 底部亮黃色金句橫幅
+    sy0, sy1 = 1095, 1192
+    draw.rounded_rectangle([64 + 8, sy0 + 8, w - 64 + 8, sy1 + 8], radius=20, fill=ink)
+    draw.rounded_rectangle([64, sy0, w - 64, sy1], radius=20, fill=neon_yellow, outline=ink, width=5)
+    slogan = "新聞在賣驚嚇，數據在算機率——別猜底，等燈燈。"
+    bs = draw.textbbox((0, 0), slogan, font=f_slogan)
+    draw.text(((w - (bs[2] - bs[0])) // 2, sy0 + 24), slogan, font=f_slogan, fill=ink)
+
+    # 6. 最底部滿版橫列：左側 QR Code ＋ 右側連結文字與免責聲明橫跨全幅
+    fy0, fy1 = 1222, 1396
+    draw.rounded_rectangle([64, fy0, w - 64, fy1], radius=20, fill=card_bg, outline=ink, width=4)
+
+    qr = qrcode.QRCode(box_size=5, border=1)
+    qr.add_data(APP_BRIEF_URL)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="#111111", back_color="#FFFDF9").convert("RGB")
+    qr_size = 138
+    qr_img = qr_img.resize((qr_size, qr_size))
+    img.paste(qr_img, (88, fy0 + (fy1 - fy0 - qr_size) // 2))
+
+    tx_x = 88 + qr_size + 32
+    draw.text((tx_x, fy0 + 24), "掃碼或點擊直達「等燈燈」快報入口：", font=f_footer_title, fill=ink)
+    draw.text((tx_x, fy0 + 74), APP_BRIEF_URL, font=f_footer_sub, fill="#1D4ED8")
+    draw.line([(tx_x, fy0 + 104), (w - 92, fy0 + 104)], fill="#1D4ED8", width=2)
+    draw.text((tx_x, fy0 + 118), "僅供行為財務學與投資情緒研究參考，非投資建議。", font=f_footer_sub, fill="#4B5563")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf.getvalue()
+
+
+def build_brief_share_text(data):
+    cnn = data["cnn"]
+    vix = data["vix"]
+    aaii = data["aaii"]
+    g_cnt = data["lights"]["green_count"]
+    stat_126 = data["win_rates"]["126D"]
+    sp_dd = data.get("sp500", {}).get("drawdown_pct", 0.0)
+    date_only = str(data.get("updated_at", "")).split(" ")[0]
+
+    return (
+        f"🚦 等燈燈｜美股逆向情緒雷達（{date_only}）\n"
+        f"今天亮了 {g_cnt} / 3 盞綠燈｜6 個月歷史勝率：{stat_126['final_win_rate']:.1f}%（S&P 500 距前高 {sp_dd:+.1f}%）\n"
+        f"• CNN 恐慌貪婪：{cnn['score']:.1f}\n"
+        f"• CBOE VIX：{vix['vix']:.1f}\n"
+        f"• AAII 散戶看空：{aaii['bearish']:.1f}%\n"
+        f"新聞在賣驚嚇，數據在算機率——別猜底，等燈燈。\n"
+        f"👉 聽 1 分鐘語音＆下載戰情圖卡：{APP_BRIEF_URL}\n"
+        f"#等燈燈 #美股 #行為財務學 #VIX #逆向投資（非投資建議）"
+    )
 
 
 def build_aligned_fear_chart(df_source, include_aaii=False):
@@ -945,7 +924,6 @@ st.caption(
     )
 )
 
-# 支援 ?view=brief 讓社群引流連結預設聚焦於快報與炫耀圖卡分頁
 query_view = str(st.query_params.get("view", "")).lower()
 tab_order = (
     [t["tab_brief"], t["tab_dashboard"], t["tab_academic"]]
@@ -965,6 +943,7 @@ lights = data["lights"]
 win_rates = data["win_rates"]
 ext_stats = compute_extremes_summary(df_hist, cnn["score"], vix["vix"], aaii["bearish"])
 
+# ================= 分頁一：維持原樣不改 =================
 with tab_dash:
     h_keys = ["126D", "252D", "63D", "21D"]
     h_code = st.radio(
@@ -972,7 +951,6 @@ with tab_dash:
         options=h_keys,
         format_func=lambda k: t["horizons"][k],
         horizontal=True,
-        key="dash_horizon_radio",
     )
     current_stat = win_rates[h_code]
     win_val = current_stat["final_win_rate"]
@@ -1363,71 +1341,48 @@ with tab_dash:
             else:
                 st.info(t["bench_pending"])
 
-# ================= 獨立分頁：🎧 戰情快報與炫耀圖卡 =================
+# ================= 分頁二：⚡ 點這裡直接看結論（極簡懶人漏斗） =================
 with tab_brief:
-    st.subheader(t["brief_header"])
-    st.caption(t["brief_sub"])
+    st.subheader(t["brief_title"])
 
-    brief_h = st.radio(
-        t["horizon_prompt"],
-        options=["126D", "252D", "63D", "21D"],
-        format_func=lambda k: t["horizons"][k],
-        horizontal=True,
-        key="brief_horizon_radio",
-    )
-    b_stat = win_rates[brief_h]
-    sp_dd_now = data.get("sp500", {}).get("drawdown_pct", 0.0)
+    # 1. 置頂：60 秒「登、登、登」語音播放器
+    st.markdown(f"**{t['brief_audio_title']}**")
+    if os.path.exists(AUDIO_PATH) and os.path.getsize(AUDIO_PATH) > 1000:
+        with open(AUDIO_PATH, "rb") as af:
+            st.audio(af.read(), format="audio/mp3")
+    else:
+        st.info(t["brief_audio_pending"])
 
-    # 1. 白話結論卡
-    verdict_html = (
-        "<div class='radar-card' style='border-left: 6px solid #4338CA;'>"
-        "<div style='font-size:" + str(font_size + 2) + "px; font-weight:800;'>"
-        + get_verdict_text(t, lights["green_count"])
-        + "</div>"
-        "<div style='margin-top:8px; opacity:0.85;'>"
-        + f"{brief_h} 實證勝率：<b>{b_stat['final_win_rate']}%</b> ｜ "
-        + f"S&P 500 平均報酬：<b>{b_stat['sp_avg_ret']:+.2f}%</b> ｜ "
-        + f"S&P 500 距前高：<b>{sp_dd_now:+.2f}%</b>"
-        + "</div></div>"
-    )
-    st.markdown(verdict_html, unsafe_allow_html=True)
+    # 2. 中央：直接呈現「等燈燈」爆款戰情圖卡（固定 6 個月基準、含日期與滿版 QR Code）
+    date_slug = str(data.get("updated_at", "")).split(" ")[0] or "latest"
+    poster_bytes = generate_dengdengdeng_poster_png(data)
+    st.image(poster_bytes, use_container_width=True)
 
-    col_left, col_right = st.columns([1.05, 0.95])
+    # 3. 圖卡正下方：一鍵下載（存電腦事後檢驗）＋ 一鍵分享至各大平台
+    share_caption = build_brief_share_text(data)
+    encoded_text = urllib.parse.quote(share_caption)
+    line_share_url = f"https://social-plugins.line.me/lineit/share?url={urllib.parse.quote(APP_BRIEF_URL)}&text={encoded_text}"
+    x_share_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
 
-    # 2. 左側：一鍵下載戰情 PNG 圖卡
-    with col_left:
-        st.markdown("#### " + t["brief_card_title"])
-        st.caption(t["brief_card_desc"])
-        png_bytes = generate_radar_share_png(data, brief_h)
-        st.image(png_bytes, use_container_width=True)
+    btn_col1, btn_col2, btn_col3 = st.columns([1.4, 1, 1])
+    with btn_col1:
         st.download_button(
             label=t["brief_download_btn"],
-            data=png_bytes,
-            file_name=f"us-sentiment-radar-{brief_h}.png",
+            data=poster_bytes,
+            file_name=f"dengdengdeng_{date_slug}.png",
             mime="image/png",
             type="primary",
             use_container_width=True,
         )
+    with btn_col2:
+        st.link_button(t["brief_share_line"], line_share_url, use_container_width=True)
+    with btn_col3:
+        st.link_button(t["brief_share_x"], x_share_url, use_container_width=True)
 
-    # 3. 右側：一鍵複製專業短評 ＋ 60 秒白話解說稿
-    with col_right:
-        st.markdown("#### " + t["brief_copy_title"])
-        share_text = build_share_commentary(selected_lang, data, brief_h)
-        st.code(share_text, language=None)
+    st.markdown(f"**{t['brief_copy_title']}**")
+    st.code(share_caption, language=None)
 
-        st.markdown("#### " + t["brief_script_title"])
-        spoken_text = build_spoken_script(selected_lang, data, brief_h)
-        st.text_area(
-            "spoken_script_box",
-            value=spoken_text,
-            height=210,
-            label_visibility="collapsed",
-        )
-        st.caption(t["brief_audio_note"])
-
-    st.divider()
-    st.info(f"**{t['brief_nudge_title']}** — {t['brief_nudge_desc']}")
-
+# ================= 分頁三：維持原樣不改 =================
 with tab_acad:
     st.markdown(t["academic_md"])
     st.link_button(t["github_btn"], GITHUB_REPO_URL)
