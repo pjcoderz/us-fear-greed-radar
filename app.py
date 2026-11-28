@@ -82,7 +82,7 @@ I18N = {
         "card2_ext": "極端值：最低 {min_v:.2f} / 最高 {max_v:.2f}（目前恐慌百分位 {pct:.0f}%）",
         "card3_title": "3. AAII 散戶看空比例 ({date})",
         "card3_sub": "看多 {bull}% / 中立 {neut}%（多空差 {spread}%）<br>散戶極端看空加權：<b>+{bonus}%</b>",
-        "card3_ext": "極端值：最低 {min_v:.1f}% / 最高 {max_v:.1f}%（目前看空百分位 {pct:.0f}%）",
+        "card3_ext": "極端值：最低 {min_v:.1f}% / 最高 {max_v:.1f}（目前看空百分位 {pct:.0f}%）",
         "bearish_unit": "看空",
         "lights": {
             "cnn": {"green": "🟢 極度恐慌 (買點亮燈)", "yellow": "🟡 恐慌觀察", "red": "🔴 中性/貪婪"},
@@ -119,9 +119,7 @@ I18N = {
         "brief_audio_title": "🔊 聽 1 分鐘「登、登、登」語音結論",
         "brief_audio_pending": "⏳ 語音檔將於下一次 GitHub Actions 更新時自動產生，下方先為您呈現今日 1 分鐘語音播報內容：",
         "brief_download_btn": "⬇️ 一鍵下載戰情圖卡 (PNG 存檔檢驗)",
-        "brief_share_line": "💬 分享至 LINE",
-        "brief_share_x": "𝕏 分享至 X / Twitter",
-        "brief_copy_title": "📋 一鍵複製社群貼文（Threads / FB / 小紅書可直接貼上）",
+        "brief_copy_title": "📄 完整可編輯分享文案",
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -210,9 +208,7 @@ I18N = {
         "brief_audio_title": "🔊 Play 1-Min Audio Brief",
         "brief_audio_pending": "⏳ Audio MP3 will be generated on the next GitHub Actions run. Here is today's 1-minute brief:",
         "brief_download_btn": "⬇️ Download Radar Card (PNG)",
-        "brief_share_line": "💬 Share to LINE",
-        "brief_share_x": "𝕏 Share to X",
-        "brief_copy_title": "📋 Copy Social Caption (Threads / FB / X)",
+        "brief_copy_title": "📄 Editable Share Caption",
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -300,9 +296,7 @@ I18N = {
         "brief_audio_title": "🔊 1分で結論を聴く（音声ブリーフ）",
         "brief_audio_pending": "⏳ 次回の GitHub Actions 実行後に音声 MP3 が生成されます。",
         "brief_download_btn": "⬇️ 戦情カード (PNG) をダウンロード",
-        "brief_share_line": "💬 LINE でシェア",
-        "brief_share_x": "𝕏 X でシェア",
-        "brief_copy_title": "📋 SNS投稿用テキストをコピー",
+        "brief_copy_title": "📄 SNS投稿用テキスト",
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -519,7 +513,7 @@ def generate_dengdengdeng_poster_png(data):
     bs = draw.textbbox((0, 0), slogan, font=f_slogan)
     draw.text(((w - (bs[2] - bs[0])) // 2, sy0 + 24), slogan, font=f_slogan, fill=ink)
 
-    # 6. 最底部滿版橫列：左側 QR Code ＋ 右側連結文字與免責聲明橫跨全幅
+    # 6. 最底部滿版橫列：左側 QR Code ＋ 右側乾淨網址與免責聲明橫跨全幅
     fy0, fy1 = 1222, 1396
     draw.rounded_rectangle([64, fy0, w - 64, fy1], radius=20, fill=card_bg, outline=ink, width=4)
 
@@ -532,10 +526,9 @@ def generate_dengdengdeng_poster_png(data):
     img.paste(qr_img, (88, fy0 + (fy1 - fy0 - qr_size) // 2))
 
     tx_x = 88 + qr_size + 32
-    draw.text((tx_x, fy0 + 24), "掃碼或點擊直達「等燈燈」快報入口：", font=f_footer_title, fill=ink)
-    draw.text((tx_x, fy0 + 74), APP_BRIEF_URL, font=f_footer_sub, fill="#1D4ED8")
-    draw.line([(tx_x, fy0 + 104), (w - 92, fy0 + 104)], fill="#1D4ED8", width=2)
-    draw.text((tx_x, fy0 + 118), "僅供行為財務學與投資情緒研究參考，非投資建議。", font=f_footer_sub, fill="#4B5563")
+    draw.text((tx_x, fy0 + 24), "掃描 QR Code 或輸入網址開啟「等燈燈」快報：", font=f_footer_title, fill=ink)
+    draw.text((tx_x, fy0 + 76), APP_BRIEF_URL, font=f_footer_sub, fill=ink)
+    draw.text((tx_x, fy0 + 120), "僅供行為財務學與投資情緒研究參考，非投資建議。", font=f_footer_sub, fill="#4B5563")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -1358,14 +1351,18 @@ with tab_brief:
     poster_bytes = generate_dengdengdeng_poster_png(data)
     st.image(poster_bytes, use_container_width=True)
 
-    # 3. 圖卡正下方：一鍵下載（存電腦事後檢驗）＋ 一鍵分享至各大平台
+    # 3. 圖卡正下方：一鍵下載 ＋ 真剪貼簿一鍵複製按鈕 ＋ 各大社群分享列
     share_caption = build_brief_share_text(data)
     encoded_text = urllib.parse.quote(share_caption)
-    line_share_url = f"https://social-plugins.line.me/lineit/share?url={urllib.parse.quote(APP_BRIEF_URL)}&text={encoded_text}"
-    x_share_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
+    encoded_url = urllib.parse.quote(APP_BRIEF_URL)
 
-    btn_col1, btn_col2, btn_col3 = st.columns([1.4, 1, 1])
-    with btn_col1:
+    threads_share_url = f"https://www.threads.net/intent/post?text={encoded_text}"
+    fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}&quote={encoded_text}"
+    x_share_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
+    line_share_url = f"https://social-plugins.line.me/lineit/share?url={encoded_url}&text={encoded_text}"
+
+    top_col1, top_col2 = st.columns(2)
+    with top_col1:
         st.download_button(
             label=t["brief_download_btn"],
             data=poster_bytes,
@@ -1374,13 +1371,53 @@ with tab_brief:
             type="primary",
             use_container_width=True,
         )
-    with btn_col2:
-        st.link_button(t["brief_share_line"], line_share_url, use_container_width=True)
-    with btn_col3:
-        st.link_button(t["brief_share_x"], x_share_url, use_container_width=True)
+    with top_col2:
+        copy_html = f"""
+        <button id="copyBriefBtn" onclick="copyBriefText()" style="
+            width: 100%;
+            height: 38.4px;
+            background-color: #111827;
+            color: #FACC15;
+            border: 1.5px solid #111827;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+        ">📋 一鍵複製文案與連結（IG / 抖音 / 群組貼上）</button>
+        <script>
+        function copyBriefText() {{
+            const text = {json.dumps(share_caption)};
+            navigator.clipboard.writeText(text).then(function() {{
+                const btn = document.getElementById('copyBriefBtn');
+                btn.innerText = '✅ 已複製！可直接去 IG / 抖音 / 群組貼上';
+                btn.style.backgroundColor = '#166534';
+                btn.style.color = '#FFFFFF';
+                setTimeout(function() {{
+                    btn.innerText = '📋 一鍵複製文案與連結（IG / 抖音 / 群組貼上）';
+                    btn.style.backgroundColor = '#111827';
+                    btn.style.color = '#FACC15';
+                }}, 3000);
+            }});
+        }}
+        </script>
+        """
+        st.components.v1.html(copy_html, height=46)
 
-    st.markdown(f"**{t['brief_copy_title']}**")
-    st.code(share_caption, language=None)
+    s_col1, s_col2, s_col3, s_col4, s_col5 = st.columns(5)
+    with s_col1:
+        st.link_button("🧵 Threads", threads_share_url, use_container_width=True)
+    with s_col2:
+        st.link_button("📘 Facebook", fb_share_url, use_container_width=True)
+    with s_col3:
+        st.link_button("𝕏 X / Twitter", x_share_url, use_container_width=True)
+    with s_col4:
+        st.link_button("💬 LINE", line_share_url, use_container_width=True)
+    with s_col5:
+        st.link_button("📸 IG / 抖音", "https://www.instagram.com/", use_container_width=True)
+
+    st.caption(f"🔗 乾淨快報網址（可直接長按或點擊右側複製圖示）：`{APP_BRIEF_URL}`")
+    with st.expander(t["brief_copy_title"], expanded=False):
+        st.code(share_caption, language=None)
 
 # ================= 分頁三：維持原樣不改 =================
 with tab_acad:
