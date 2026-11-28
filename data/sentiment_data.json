@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-28 16:09 UTC+8",
+  "updated_at": "2026-11-28 16:17 UTC+8",
   "alert_threshold": 90.0,
   "sp500": {
     "close": 7297.49,
@@ -15,54 +15,54 @@
     "vix_prev": 26.8
   },
   "aaii": {
-    "date": "N/A",
+    "date": "2026-11-19",
     "bullish": 35.0,
     "neutral": 30.0,
-    "bearish": 35.0,
-    "spread": 0.0
+    "bearish": 42.22,
+    "spread": -7.22
   },
   "lights": {
     "cnn_level": "green",
     "vix_level": "yellow",
-    "aaii_level": "red",
+    "aaii_level": "yellow",
     "green_count": 1
   },
   "win_rates": {
     "21D": {
-      "final_win_rate": 73.97,
-      "win_cnn": 80.56,
-      "win_vix": 64.39,
-      "aaii_bonus": 1.5,
-      "sp_avg_ret": 1.3,
-      "ndx_avg_ret": 2.25,
-      "sample_size": 2651
+      "final_win_rate": 70.24,
+      "win_cnn": 70.18,
+      "win_vix": 64.31,
+      "aaii_bonus": 3.0,
+      "sp_avg_ret": 1.26,
+      "ndx_avg_ret": 2.14,
+      "sample_size": 3023
     },
     "63D": {
-      "final_win_rate": 83.14,
-      "win_cnn": 93.55,
-      "win_vix": 69.74,
-      "aaii_bonus": 1.5,
-      "sp_avg_ret": 3.77,
-      "ndx_avg_ret": 6.87,
-      "sample_size": 2646
+      "final_win_rate": 76.03,
+      "win_cnn": 76.12,
+      "win_vix": 69.95,
+      "aaii_bonus": 3.0,
+      "sp_avg_ret": 3.62,
+      "ndx_avg_ret": 6.54,
+      "sample_size": 3018
     },
     "126D": {
-      "final_win_rate": 86.38,
-      "win_cnn": 100.0,
-      "win_vix": 69.76,
-      "aaii_bonus": 1.5,
-      "sp_avg_ret": 6.64,
-      "ndx_avg_ret": 12.65,
-      "sample_size": 2640
+      "final_win_rate": 77.62,
+      "win_cnn": 79.58,
+      "win_vix": 69.67,
+      "aaii_bonus": 3.0,
+      "sp_avg_ret": 6.41,
+      "ndx_avg_ret": 12.07,
+      "sample_size": 3012
     },
     "252D": {
-      "final_win_rate": 88.02,
-      "win_cnn": 100.0,
-      "win_vix": 73.05,
-      "aaii_bonus": 1.5,
-      "sp_avg_ret": 10.2,
-      "ndx_avg_ret": 23.12,
-      "sample_size": 2614
+      "final_win_rate": 82.17,
+      "win_cnn": 85.2,
+      "win_vix": 73.14,
+      "aaii_bonus": 3.0,
+      "sp_avg_ret": 10.01,
+      "ndx_avg_ret": 22.02,
+      "sample_size": 2988
     }
   }
 }
