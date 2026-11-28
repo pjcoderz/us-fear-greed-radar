@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-28 04:07 UTC",
+  "updated_at": "2026-11-28 06:07 UTC",
   "alert_horizon": "126D",
   "alert_threshold": 90.0,
   "cnn": {
@@ -13,7 +13,7 @@
     "sp500": 7297.49
   },
   "aaii": {
-    "date": "Nov 25",
+    "date": "1-11-25",
     "bullish": 37.1,
     "neutral": 17.5,
     "bearish": 45.4,
