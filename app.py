@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import altair as alt
 import pandas as pd
 import requests as req_lib
 import streamlit as st
@@ -82,9 +83,12 @@ I18N = {
         "tbl_cols": ["持有週期", "綜合勝率", "達 90% 警報", "CNN 勝率", "VIX 勝率", "AAII 加權", "S&P 500 平均報酬", "NASDAQ-100 平均報酬", "歷史樣本數"],
         "yes": "✅ 是",
         "days_unit": " 天",
-        "chart_header": "📈 歷史走勢圖表（點擊切換日線 / 三指標週線）",
-        "chart_modes": ["日線：CNN 恐慌指數 & VIX（每日）", "週線：CNN 恐慌 & VIX & AAII 看空比例（每週同框）"],
-        "weekly_caption": "週線三指標對照說明：CNN Fear & Greed（0–100 綜合情緒）、CBOE VIX（隱含波動率）、AAII_Bearish（每週散戶看空比例 %）。",
+        "chart_header": "📈 歷史恐慌趨勢與門檻雷達圖（點擊切換日線 / 三指標週線）",
+        "chart_modes": ["日線：CNN 恐慌度 & VIX（每日）", "週線：CNN 恐慌度 & VIX & AAII 看空（每週三指標同框）"],
+        "chart_caption": (
+            "同向門檻解讀：三條線皆已轉為「越高＝越恐慌」，紅色虛線（100%）代表各指標逆向買點綠燈門檻"
+            "（CNN_Fear ≥ 75 即原 CNN ≤ 25；VIX ≥ 30；AAII_Bearish ≥ 50%）。滑鼠移過或點選可查看原始數值。"
+        ),
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -144,9 +148,12 @@ I18N = {
         "tbl_cols": ["Holding Horizon", "Composite Win Rate", "≥ 90% Alert", "CNN Win Rate", "VIX Win Rate", "AAII Bonus", "S&P 500 Avg Return", "NASDAQ-100 Avg Return", "Sample Size"],
         "yes": "✅ Yes",
         "days_unit": " days",
-        "chart_header": "📈 Historical Trend Chart (Switch Daily / 3-Indicator Weekly)",
-        "chart_modes": ["Daily: CNN Fear & Greed & VIX", "Weekly: CNN & VIX & AAII Bearish (%) Combined"],
-        "weekly_caption": "Weekly 3-indicator overlay: CNN Fear & Greed (0–100 composite sentiment), CBOE VIX (implied volatility), and AAII_Bearish (weekly retail bearish %).",
+        "chart_header": "📈 Historical Fear Trend & Threshold Radar (Daily / 3-Indicator Weekly)",
+        "chart_modes": ["Daily: CNN Fear & VIX", "Weekly: CNN Fear & VIX & AAII Bearish (3-Series Weekly)"],
+        "chart_caption": (
+            "Aligned Threshold Guide: All series are oriented so HIGHER = MORE FEAR, with 100% marking each contrarian green-light threshold"
+            " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Hover or tap to inspect raw values."
+        ),
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -206,9 +213,12 @@ I18N = {
         "tbl_cols": ["保有期間", "総合勝率", "90%警報", "CNN勝率", "VIX勝率", "AAII補正", "S&P 500 平均リターン", "NASDAQ-100 平均リターン", "サンプル数"],
         "yes": "✅ 達成",
         "days_unit": " 日",
-        "chart_header": "📈 過去の推移チャート（日足 / 3指標週足 切替）",
-        "chart_modes": ["日足：CNN恐怖指数 & VIX（日次）", "週足：CNN & VIX & AAII 弱気比率（週次3指標同時表示）"],
-        "weekly_caption": "週足3指標表示：CNN Fear & Greed（0〜100 総合センチメント）、CBOE VIX（インプライド・ボラティリティ）、AAII_Bearish（週次個人投資家弱気比率 %）。",
+        "chart_header": "📈 過去の恐怖トレンド・閾値レーダー（日足 / 3指標週足 切替）",
+        "chart_modes": ["日足：CNN恐怖度 & VIX", "週足：CNN恐怖度 & VIX & AAII弱気（週次3指標同框）"],
+        "chart_caption": (
+            "同向閾値の見方：全指標を「高いほど恐怖」に統一し、100%ラインを逆張り買い点灯基準としました"
+            "（CNN_Fear ≥ 75＝元CNN ≤ 25、VIX ≥ 30、AAII_Bearish ≥ 50%）。ホバーまたはタップで元数値を確認できます。"
+        ),
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -243,6 +253,77 @@ def update_visitor_counter():
         st.session_state["counted"] = True
         st.session_state["visitor_count"] = count
     return st.session_state.get("visitor_count", 1001)
+
+
+def build_aligned_fear_chart(df_source, include_aaii=False):
+    records = []
+    for idx, row in df_source.iterrows():
+        dt_str = idx.strftime("%Y-%m-%d")
+        if "CNN_FG" in df_source.columns and pd.notna(row.get("CNN_FG")):
+            raw_cnn = float(row["CNN_FG"])
+            cnn_fear = 100.0 - raw_cnn
+            records.append({
+                "Date": dt_str,
+                "Indicator": "CNN_Fear (100 - CNN)",
+                "ThresholdPct": round((cnn_fear / 75.0) * 100.0, 1),
+                "RawText": f"{raw_cnn:.1f} (Fear {cnn_fear:.1f} / 100)",
+            })
+        if "VIX" in df_source.columns and pd.notna(row.get("VIX")):
+            raw_vix = float(row["VIX"])
+            records.append({
+                "Date": dt_str,
+                "Indicator": "VIX",
+                "ThresholdPct": round((raw_vix / 30.0) * 100.0, 1),
+                "RawText": f"{raw_vix:.2f}",
+            })
+        if include_aaii and "AAII_Bearish" in df_source.columns and pd.notna(row.get("AAII_Bearish")):
+            raw_aaii = float(row["AAII_Bearish"])
+            records.append({
+                "Date": dt_str,
+                "Indicator": "AAII_Bearish",
+                "ThresholdPct": round((raw_aaii / 50.0) * 100.0, 1),
+                "RawText": f"{raw_aaii:.1f}%",
+            })
+
+    if not records:
+        return None
+
+    df_long = pd.DataFrame(records)
+    domain_list = ["CNN_Fear (100 - CNN)", "VIX"] + (["AAII_Bearish"] if include_aaii else [])
+    range_list = ["#2563EB", "#D97706"] + (["#059669"] if include_aaii else [])
+
+    lines = (
+        alt.Chart(df_long)
+        .mark_line(strokeWidth=2.2)
+        .encode(
+            x=alt.X("Date:N", title=None, axis=alt.Axis(labelAngle=-35, tickCount=10)),
+            y=alt.Y(
+                "ThresholdPct:Q",
+                title="Threshold Level (100% = Green Light)",
+                scale=alt.Scale(domain=[0, 180], clamp=True),
+            ),
+            color=alt.Color(
+                "Indicator:N",
+                scale=alt.Scale(domain=domain_list, range=range_list),
+                legend=alt.Legend(title=None, orient="top"),
+            ),
+            tooltip=[
+                alt.Tooltip("Date:N", title="Date"),
+                alt.Tooltip("Indicator:N", title="Indicator"),
+                alt.Tooltip("ThresholdPct:Q", title="Threshold %"),
+                alt.Tooltip("RawText:N", title="Raw Value"),
+            ],
+        )
+    )
+
+    threshold_df = pd.DataFrame({"y": [100.0]})
+    rule = (
+        alt.Chart(threshold_df)
+        .mark_rule(color="#DC2626", strokeDash=[5, 4], strokeWidth=2)
+        .encode(y="y:Q")
+    )
+
+    return (lines + rule).properties(height=340).interactive()
 
 
 with st.sidebar:
@@ -702,16 +783,18 @@ with tab_dash:
         )
 
         if selected_mode == 0:
-            daily_cols = [c for c in ["CNN_FG", "VIX"] if c in df_hist.columns]
-            if daily_cols:
-                st.line_chart(df_hist[daily_cols])
+            chart_obj = build_aligned_fear_chart(df_hist, include_aaii=False)
+            if chart_obj is not None:
+                st.altair_chart(chart_obj, use_container_width=True)
+                st.caption(t["chart_caption"])
         else:
             weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish"] if c in df_hist.columns]
             if weekly_cols:
                 df_weekly = df_hist[weekly_cols].resample("W-FRI").last().dropna(how="all")
-                if not df_weekly.empty:
-                    st.line_chart(df_weekly)
-                    st.caption(t["weekly_caption"])
+                chart_obj = build_aligned_fear_chart(df_weekly, include_aaii=True)
+                if chart_obj is not None:
+                    st.altair_chart(chart_obj, use_container_width=True)
+                    st.caption(t["chart_caption"])
             else:
                 st.info("Weekly series pending next GitHub Actions run.")
 
