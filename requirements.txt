@@ -6,3 +6,7 @@ lxml
 html5lib
 urllib3
 streamlit
+altair
+pillow
+qrcode
+edge-tts
