@@ -82,14 +82,22 @@ I18N = {
             "vix": {"green": "🟢 恐慌噴出 (買點亮燈)", "yellow": "🟡 波動升溫", "red": "🔴 市場平靜"},
             "aaii": {"green": "🟢 散戶投降 (買點亮燈)", "yellow": "🟡 散戶偏空", "red": "🔴 散戶偏多/中性"},
         },
-        "section_table": "📈 多週期實證回測勝率與報酬對照表 (2011 年至今)",
+        "section_table": "📈 多週期實證回測勝率與報酬對照表",
         "tbl_cols": ["持有週期", "綜合勝率", "達 90% 警報", "CNN 勝率", "VIX 勝率", "AAII 加權", "S&P 500 平均報酬", "NASDAQ-100 平均報酬", "歷史樣本數"],
         "yes": "✅ 是",
         "days_unit": " 天",
         "chart_header": "📈 歷史恐慌趨勢與門檻雷達圖",
         "chart_modes": ["日線：CNN 恐慌度 & VIX（每日）", "週線：CNN 恐慌度 & VIX & AAII 看空（每週三指標同框）"],
-        "range_opts": ["3M", "6M", "1Y", "ALL"],
-        "range_labels": {"3M": "近 3 個月", "6M": "近 6 個月", "1Y": "近 1 年", "ALL": "全部歷史"},
+        "range_opts": ["3M", "6M", "1Y", "3Y", "5Y", "2011+", "ALL"],
+        "range_labels": {
+            "3M": "近 3 個月",
+            "6M": "近 6 個月",
+            "1Y": "近 1 年",
+            "3Y": "近 3 年",
+            "5Y": "近 5 年",
+            "2011+": "2011 年至今",
+            "ALL": "全部歷史",
+        },
         "chart_caption": (
             "同向門檻解讀：三條線皆為「越高＝越恐慌」，紅色虛線（100%）為逆向買點綠燈門檻"
             "（CNN_Fear ≥ 75 即原 CNN ≤ 25；VIX ≥ 30；AAII_Bearish ≥ 50%）。指標尚未發展或缺漏期間直接留白；"
@@ -153,14 +161,22 @@ I18N = {
             "vix": {"green": "🟢 Panic Spike (Buy Signal)", "yellow": "🟡 Elevated Vol", "red": "🔴 Calm Market"},
             "aaii": {"green": "🟢 Retail Capitulation (Buy Signal)", "yellow": "🟡 Retail Bearish", "red": "🔴 Neutral / Bullish"},
         },
-        "section_table": "📈 Multi-Horizon Empirical Win Rates & Forward Returns (2011–Present)",
+        "section_table": "📈 Multi-Horizon Empirical Win Rates & Forward Returns",
         "tbl_cols": ["Holding Horizon", "Composite Win Rate", "≥ 90% Alert", "CNN Win Rate", "VIX Win Rate", "AAII Bonus", "S&P 500 Avg Return", "NASDAQ-100 Avg Return", "Sample Size"],
         "yes": "✅ Yes",
         "days_unit": " days",
         "chart_header": "📈 Historical Fear Trend & Threshold Radar",
         "chart_modes": ["Daily: CNN Fear & VIX", "Weekly: CNN Fear & VIX & AAII Bearish (3-Series Weekly)"],
-        "range_opts": ["3M", "6M", "1Y", "ALL"],
-        "range_labels": {"3M": "3M", "6M": "6M", "1Y": "1Y", "ALL": "All History"},
+        "range_opts": ["3M", "6M", "1Y", "3Y", "5Y", "2011+", "ALL"],
+        "range_labels": {
+            "3M": "3M",
+            "6M": "6M",
+            "1Y": "1Y",
+            "3Y": "3Y",
+            "5Y": "5Y",
+            "2011+": "2011+",
+            "ALL": "All History",
+        },
         "chart_caption": (
             "Aligned Threshold Guide: HIGHER = MORE FEAR, with 100% marking each contrarian green-light threshold"
             " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Missing or pre-inception periods stay blank; "
@@ -217,21 +233,29 @@ I18N = {
         "card2_ext": "極値：最小 {min_v:.2f} / 最大 {max_v:.2f}（現在恐怖パーセンタイル {pct:.0f}%）",
         "card3_title": "3. AAII 個人投資家弱気比率 ({date})",
         "card3_sub": "強気 {bull}% / 中立 {neut}%（強弱スプレッド {spread}%）<br>極端な弱気補正：<b>+{bonus}%</b>",
-        "card3_ext": "極値：最小 {min_v:.1f}% / 最大 {max_v:.1f}（現在弱気パーセンタイル {pct:.0f}%）",
+        "card3_ext": "極値：最小 {min_v:.1f}% / 最大 {max_v:.1f}%（現在弱気パーセンタイル {pct:.0f}%）",
         "bearish_unit": "弱気",
         "lights": {
             "cnn": {"green": "🟢 極度の恐怖 (買い点灯)", "yellow": "🟡 恐怖警戒", "red": "🔴 中立・強欲"},
             "vix": {"green": "🟢 パニック急騰 (買い点灯)", "yellow": "🟡 ボラティリティ上昇", "red": "🔴 市場安定"},
             "aaii": {"green": "🟢 個人投資家総悲観 (買い点灯)", "yellow": "🟡 弱気優勢", "red": "🔴 強気・中立"},
         },
-        "section_table": "📈 保有期間別・実証勝率および平均リターン比較表 (2011年〜現在)",
+        "section_table": "📈 保有期間別・実証勝率および平均リターン比較表",
         "tbl_cols": ["保有期間", "総合勝率", "90%警報", "CNN勝率", "VIX勝率", "AAII補正", "S&P 500 平均リターン", "NASDAQ-100 平均リターン", "サンプル数"],
         "yes": "✅ 達成",
         "days_unit": " 日",
         "chart_header": "📈 過去の恐怖トレンド・閾値レーダー",
         "chart_modes": ["日足：CNN恐怖度 & VIX", "週足：CNN恐怖度 & VIX & AAII弱気（週次3指標同框）"],
-        "range_opts": ["3M", "6M", "1Y", "ALL"],
-        "range_labels": {"3M": "3ヶ月", "6M": "6ヶ月", "1Y": "1年", "ALL": "全期間"},
+        "range_opts": ["3M", "6M", "1Y", "3Y", "5Y", "2011+", "ALL"],
+        "range_labels": {
+            "3M": "3ヶ月",
+            "6M": "6ヶ月",
+            "1Y": "1年",
+            "3Y": "3年",
+            "5Y": "5年",
+            "2011+": "2011年〜",
+            "ALL": "全期間",
+        },
         "chart_caption": (
             "同向閾値の見方：全指標を「高いほど恐怖」に統一し、100%ラインを逆張り買い点灯基準としました"
             "（CNN_Fear ≥ 75＝元CNN ≤ 25、VIX ≥ 30、AAII_Bearish ≥ 50%）。未整備・欠損期間は空白表示となり、"
@@ -287,7 +311,6 @@ def compute_extremes_summary(df_hist, cnn_val, vix_val, aaii_val):
         if not s_cnn.empty:
             summary["cnn"]["min_v"] = float(s_cnn.min())
             summary["cnn"]["max_v"] = float(s_cnn.max())
-            # 越低越恐慌：目前數值低於或等於歷史多少比例
             summary["cnn"]["pct"] = float((s_cnn <= float(cnn_val)).mean() * 100.0)
 
     if "VIX" in df_hist.columns:
@@ -314,6 +337,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
     records = []
     for idx, row in df_source.iterrows():
         dt_str = idx.strftime("%Y-%m-%d")
+
         if "CNN_FG" in df_source.columns and pd.notna(row.get("CNN_FG")):
             raw_cnn = float(row["CNN_FG"])
             cnn_fear = 100.0 - raw_cnn
@@ -323,6 +347,14 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "ThresholdPct": round((cnn_fear / 75.0) * 100.0, 1),
                 "RawText": f"{raw_cnn:.1f} (Fear {cnn_fear:.1f} / 100)",
             })
+        else:
+            records.append({
+                "Date": dt_str,
+                "Indicator": "CNN_Fear (100 - CNN)",
+                "ThresholdPct": None,
+                "RawText": "N/A",
+            })
+
         if "VIX" in df_source.columns and pd.notna(row.get("VIX")):
             raw_vix = float(row["VIX"])
             records.append({
@@ -331,19 +363,35 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "ThresholdPct": round((raw_vix / 30.0) * 100.0, 1),
                 "RawText": f"{raw_vix:.2f}",
             })
-        if include_aaii and "AAII_Bearish" in df_source.columns and pd.notna(row.get("AAII_Bearish")):
-            raw_aaii = float(row["AAII_Bearish"])
+        else:
             records.append({
                 "Date": dt_str,
-                "Indicator": "AAII_Bearish",
-                "ThresholdPct": round((raw_aaii / 50.0) * 100.0, 1),
-                "RawText": f"{raw_aaii:.1f}%",
+                "Indicator": "VIX",
+                "ThresholdPct": None,
+                "RawText": "N/A",
             })
 
-    if not records:
-        return None
+        if include_aaii:
+            if "AAII_Bearish" in df_source.columns and pd.notna(row.get("AAII_Bearish")):
+                raw_aaii = float(row["AAII_Bearish"])
+                records.append({
+                    "Date": dt_str,
+                    "Indicator": "AAII_Bearish",
+                    "ThresholdPct": round((raw_aaii / 50.0) * 100.0, 1),
+                    "RawText": f"{raw_aaii:.1f}%",
+                })
+            else:
+                records.append({
+                    "Date": dt_str,
+                    "Indicator": "AAII_Bearish",
+                    "ThresholdPct": None,
+                    "RawText": "N/A",
+                })
 
     df_long = pd.DataFrame(records)
+    if df_long["ThresholdPct"].dropna().empty:
+        return None
+
     domain_list = ["CNN_Fear (100 - CNN)", "VIX"] + (["AAII_Bearish"] if include_aaii else [])
     range_list = ["#2563EB", "#D97706"] + (["#059669"] if include_aaii else [])
 
@@ -372,7 +420,6 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
         )
     )
 
-    # 透明感應層：吸附最近日期並觸發十字準星與 Tooltip
     hover_layer = (
         alt.Chart(df_long)
         .mark_point(opacity=0, size=60)
@@ -389,7 +436,6 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
         .add_params(nearest)
     )
 
-    # 十字準星垂直線
     crosshair_rule = (
         alt.Chart(df_long)
         .mark_rule(color="#64748B", strokeDash=[3, 3], strokeWidth=1.2)
@@ -397,7 +443,6 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
         .transform_filter(nearest)
     )
 
-    # 吸附點高亮圓圈
     active_points = (
         alt.Chart(df_long)
         .mark_circle(size=75)
@@ -892,29 +937,34 @@ with tab_dash:
 
     if df_hist is not None and not df_hist.empty:
         st.subheader(t["chart_header"])
-        ctrl_col1, ctrl_col2 = st.columns([2, 2])
-        with ctrl_col1:
-            selected_mode = st.radio(
-                "chart_mode_switch",
-                options=[0, 1],
-                format_func=lambda i: t["chart_modes"][i],
-                horizontal=True,
-                label_visibility="collapsed",
-            )
-        with ctrl_col2:
-            selected_range = st.radio(
-                "chart_range_switch",
-                options=t["range_opts"],
-                format_func=lambda r: t["range_labels"][r],
-                index=3,
-                horizontal=True,
-                label_visibility="collapsed",
-            )
+        selected_mode = st.radio(
+            "chart_mode_switch",
+            options=[0, 1],
+            format_func=lambda i: t["chart_modes"][i],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        selected_range = st.radio(
+            "chart_range_switch",
+            options=t["range_opts"],
+            format_func=lambda r: t["range_labels"][r],
+            index=len(t["range_opts"]) - 1,
+            horizontal=True,
+            label_visibility="collapsed",
+        )
 
         max_dt = df_hist.index.max()
-        range_days = {"3M": 92, "6M": 183, "1Y": 365}
+        range_days = {
+            "3M": 92,
+            "6M": 183,
+            "1Y": 365,
+            "3Y": 1096,
+            "5Y": 1826,
+        }
         if selected_range in range_days and pd.notna(max_dt):
             df_filtered = df_hist[df_hist.index >= (max_dt - pd.Timedelta(days=range_days[selected_range]))]
+        elif selected_range == "2011+":
+            df_filtered = df_hist[df_hist.index >= pd.Timestamp("2011-01-01")]
         else:
             df_filtered = df_hist
 
