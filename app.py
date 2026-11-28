@@ -101,8 +101,12 @@ I18N = {
         "chart_caption": (
             "同向門檻解讀：三條線皆為「越高＝越恐慌」，紅色虛線（100%）為逆向買點綠燈門檻"
             "（CNN_Fear ≥ 75 即原 CNN ≤ 25；VIX ≥ 30；AAII_Bearish ≥ 50%）。指標尚未發展或缺漏期間直接留白；"
-            "滑鼠移過或手指點選可查看十字準星對齊與該日期原始數值。"
+            "滑鼠移過或手指點選任一日期，十字準星 Tooltip 會同步顯示該日「S&P 500 距前高回檔比例」。"
         ),
+        "bench_expander": "📉 點開平行大盤價格走勢對照（S&P 500 / NASDAQ-100，與上方時間區間同步）",
+        "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
+        "bench_caption": "純背景基準參考圖層（不參與情緒燈號運算），可垂直對照上方情緒未亮燈時的緩跌與三燈齊亮時的位置。",
+        "bench_pending": "⏳ 平行指數收盤序列將於下一次 GitHub Actions 更新後顯示。",
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
             "### 一、研究背景與設計理念\n\n"
@@ -179,9 +183,13 @@ I18N = {
         },
         "chart_caption": (
             "Aligned Threshold Guide: HIGHER = MORE FEAR, with 100% marking each contrarian green-light threshold"
-            " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Missing or pre-inception periods stay blank; "
-            "hover or tap for crosshair alignment and exact raw values."
+            " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Hover or tap any date to view crosshair values "
+            "including S&P 500 drawdown from its all-time high."
         ),
+        "bench_expander": "📉 Expand Parallel Index Price Chart (S&P 500 / NASDAQ-100, synced with range above)",
+        "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
+        "bench_caption": "Pure background price reference layer (excluded from sentiment signal logic) for post-survey visual comparison.",
+        "bench_pending": "⏳ Parallel index price series will appear after the next GitHub Actions run.",
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
             "### 1. Academic Rationale\n\n"
@@ -257,10 +265,13 @@ I18N = {
             "ALL": "全期間",
         },
         "chart_caption": (
-            "同向閾値の見方：全指標を「高いほど恐怖」に統一し、100%ラインを逆張り買い点灯基準としました"
-            "（CNN_Fear ≥ 75＝元CNN ≤ 25、VIX ≥ 30、AAII_Bearish ≥ 50%）。未整備・欠損期間は空白表示となり、"
-            "ホバーまたはタップで十字線と元数値を確認できます。"
+            "同向閾値の見方：全指標を「高いほど恐怖」に統一し、100%ラインを逆張り買い点灯基準としました。"
+            "ホバーまたはタップで十字線とともに「S&P 500 高値からの下落率」も確認できます。"
         ),
+        "bench_expander": "📉 平行株価チャートを開く（S&P 500 / NASDAQ-100・上の表示期間と連動）",
+        "bench_opts": ["S&P 500 (^GSPC)", "NASDAQ-100 (^NDX)"],
+        "bench_caption": "センチメント判定には含めない純粋な背景参照チャートです。",
+        "bench_pending": "⏳ 次回の GitHub Actions 実行後に平行株価データが表示されます。",
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
             "### 1. 研究背景と設計コンセプト\n\n"
@@ -334,9 +345,21 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
     if df_source is None or df_source.empty:
         return None
 
+    has_dd = "SP500_DD" in df_source.columns
+    has_sp = "SP500" in df_source.columns
+
     records = []
     for idx, row in df_source.iterrows():
         dt_str = idx.strftime("%Y-%m-%d")
+
+        if has_dd and pd.notna(row.get("SP500_DD")):
+            dd_val = float(row["SP500_DD"])
+            if has_sp and pd.notna(row.get("SP500")):
+                sp_dd_text = f"{dd_val:+.2f}% (SP500: {float(row['SP500']):,.0f})"
+            else:
+                sp_dd_text = f"{dd_val:+.2f}%"
+        else:
+            sp_dd_text = "N/A"
 
         if "CNN_FG" in df_source.columns and pd.notna(row.get("CNN_FG")):
             raw_cnn = float(row["CNN_FG"])
@@ -346,6 +369,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "Indicator": "CNN_Fear (100 - CNN)",
                 "ThresholdPct": round((cnn_fear / 75.0) * 100.0, 1),
                 "RawText": f"{raw_cnn:.1f} (Fear {cnn_fear:.1f} / 100)",
+                "SP500_DD_Text": sp_dd_text,
             })
         else:
             records.append({
@@ -353,6 +377,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "Indicator": "CNN_Fear (100 - CNN)",
                 "ThresholdPct": None,
                 "RawText": "N/A",
+                "SP500_DD_Text": sp_dd_text,
             })
 
         if "VIX" in df_source.columns and pd.notna(row.get("VIX")):
@@ -362,6 +387,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "Indicator": "VIX",
                 "ThresholdPct": round((raw_vix / 30.0) * 100.0, 1),
                 "RawText": f"{raw_vix:.2f}",
+                "SP500_DD_Text": sp_dd_text,
             })
         else:
             records.append({
@@ -369,6 +395,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 "Indicator": "VIX",
                 "ThresholdPct": None,
                 "RawText": "N/A",
+                "SP500_DD_Text": sp_dd_text,
             })
 
         if include_aaii:
@@ -379,6 +406,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                     "Indicator": "AAII_Bearish",
                     "ThresholdPct": round((raw_aaii / 50.0) * 100.0, 1),
                     "RawText": f"{raw_aaii:.1f}%",
+                    "SP500_DD_Text": sp_dd_text,
                 })
             else:
                 records.append({
@@ -386,6 +414,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                     "Indicator": "AAII_Bearish",
                     "ThresholdPct": None,
                     "RawText": "N/A",
+                    "SP500_DD_Text": sp_dd_text,
                 })
 
     df_long = pd.DataFrame(records)
@@ -431,6 +460,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 alt.Tooltip("Indicator:N", title="Indicator"),
                 alt.Tooltip("ThresholdPct:Q", title="Threshold %"),
                 alt.Tooltip("RawText:N", title="Raw Value"),
+                alt.Tooltip("SP500_DD_Text:N", title="S&P 500 vs ATH"),
             ],
         )
         .add_params(nearest)
@@ -462,6 +492,78 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
     )
 
     return (lines + rule + crosshair_rule + active_points + hover_layer).properties(height=360)
+
+
+def build_parallel_index_chart(df_source, col_name, label_name, line_color="#475569"):
+    if df_source is None or df_source.empty or col_name not in df_source.columns:
+        return None
+
+    s = pd.to_numeric(df_source[col_name], errors="coerce")
+    if s.dropna().empty:
+        return None
+
+    dd_s = ((s / s.cummax()) - 1.0) * 100.0
+    rows = []
+    for idx in df_source.index:
+        dt_str = idx.strftime("%Y-%m-%d")
+        val = s.loc[idx]
+        dd_val = dd_s.loc[idx]
+        rows.append({
+            "Date": dt_str,
+            "Price": round(float(val), 2) if pd.notna(val) else None,
+            "DDText": f"{float(dd_val):+.2f}%" if pd.notna(dd_val) else "N/A",
+        })
+
+    df_idx = pd.DataFrame(rows)
+    nearest = alt.selection_point(
+        nearest=True,
+        on="pointerover",
+        fields=["Date"],
+        empty=False,
+    )
+
+    line = (
+        alt.Chart(df_idx)
+        .mark_line(strokeWidth=2.0, color=line_color)
+        .encode(
+            x=alt.X("Date:N", title=None, axis=alt.Axis(labelAngle=-35, tickCount=10)),
+            y=alt.Y("Price:Q", title=label_name, scale=alt.Scale(zero=False)),
+        )
+    )
+
+    hover = (
+        alt.Chart(df_idx)
+        .mark_point(opacity=0, size=60)
+        .encode(
+            x=alt.X("Date:N"),
+            y=alt.Y("Price:Q"),
+            tooltip=[
+                alt.Tooltip("Date:N", title="Date"),
+                alt.Tooltip("Price:Q", title=label_name, format=",.2f"),
+                alt.Tooltip("DDText:N", title="Drawdown vs Peak"),
+            ],
+        )
+        .add_params(nearest)
+    )
+
+    rule = (
+        alt.Chart(df_idx)
+        .mark_rule(color="#64748B", strokeDash=[3, 3], strokeWidth=1.2)
+        .encode(x=alt.X("Date:N"))
+        .transform_filter(nearest)
+    )
+
+    dot = (
+        alt.Chart(df_idx)
+        .mark_circle(size=70, color=line_color)
+        .encode(
+            x=alt.X("Date:N"),
+            y=alt.Y("Price:Q"),
+            opacity=alt.condition(nearest, alt.value(1), alt.value(0)),
+        )
+    )
+
+    return (line + rule + dot + hover).properties(height=250)
 
 
 with st.sidebar:
@@ -969,20 +1071,42 @@ with tab_dash:
             df_filtered = df_hist
 
         if selected_mode == 0:
-            chart_obj = build_aligned_fear_chart(df_filtered, include_aaii=False)
+            df_chart_src = df_filtered
+            chart_obj = build_aligned_fear_chart(df_chart_src, include_aaii=False)
             if chart_obj is not None:
                 st.altair_chart(chart_obj, use_container_width=True)
                 st.caption(t["chart_caption"])
         else:
-            weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish"] if c in df_filtered.columns]
-            if weekly_cols:
-                df_weekly = df_filtered[weekly_cols].resample("W-FRI").last().dropna(how="all")
-                chart_obj = build_aligned_fear_chart(df_weekly, include_aaii=True)
+            weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish", "SP500", "SP500_DD", "NDX"] if c in df_filtered.columns]
+            if any(c in weekly_cols for c in ["CNN_FG", "VIX", "AAII_Bearish"]):
+                df_chart_src = df_filtered[weekly_cols].resample("W-FRI").last().dropna(how="all")
+                chart_obj = build_aligned_fear_chart(df_chart_src, include_aaii=True)
                 if chart_obj is not None:
                     st.altair_chart(chart_obj, use_container_width=True)
                     st.caption(t["chart_caption"])
             else:
+                df_chart_src = df_filtered
                 st.info("Weekly series pending next GitHub Actions run.")
+
+        # 圖表下方可折疊展開的平行大盤價格走勢對照（與上方時間區間及日/週頻率同步）
+        with st.expander(t["bench_expander"], expanded=False):
+            bench_choice = st.radio(
+                "bench_index_switch",
+                options=[0, 1],
+                format_func=lambda i: t["bench_opts"][i],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+            target_col = "SP500" if bench_choice == 0 else "NDX"
+            target_label = "S&P 500" if bench_choice == 0 else "NASDAQ-100"
+            target_color = "#334155" if bench_choice == 0 else "#7C3AED"
+
+            bench_chart = build_parallel_index_chart(df_chart_src, target_col, target_label, target_color)
+            if bench_chart is not None:
+                st.altair_chart(bench_chart, use_container_width=True)
+                st.caption(t["bench_caption"])
+            else:
+                st.info(t["bench_pending"])
 
 with tab_acad:
     st.markdown(t["academic_md"])
