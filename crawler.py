@@ -1,4 +1,5 @@
 import datetime
+import glob
 import json
 import os
 import smtplib
@@ -15,10 +16,6 @@ DATA_DIR = "data"
 JSON_PATH = os.path.join(DATA_DIR, "sentiment_data.json")
 CSV_PATH = os.path.join(DATA_DIR, "history_backtest.csv")
 
-LOCAL_VIX_PATH = "VIX_History.csv"
-LOCAL_CNN_PATH = "fear-greed.csv"
-LOCAL_AAII_PATH = "aaii_history.csv"
-
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -30,60 +27,94 @@ HEADERS = {
 }
 
 
+def find_csv_case_insensitive(keywords, exclude_names=None):
+    """在根目錄與 data/ 資料夾中不分大小寫尋找符合關鍵字的歷史 CSV 檔"""
+    exclude_names = {n.lower() for n in (exclude_names or [])}
+    candidates = []
+    for folder in [".", DATA_DIR]:
+        if os.path.isdir(folder):
+            for path in glob.glob(os.path.join(folder, "*.csv")):
+                fname = os.path.basename(path).lower()
+                if fname in exclude_names:
+                    continue
+                if any(kw in fname for kw in keywords):
+                    candidates.append(path)
+    # 優先選檔案較大的（避免誤選到只有幾行的暫存檔）
+    candidates.sort(key=lambda p: os.path.getsize(p), reverse=True)
+    return candidates[0] if candidates else None
+
+
 def load_local_vix():
-    if not os.path.exists(LOCAL_VIX_PATH):
+    path = find_csv_case_insensitive(["vix"], exclude_names=["history_backtest.csv"])
+    if not path:
+        print("[WARN] Local VIX CSV not found.")
         return pd.Series(dtype=float)
     try:
-        df = pd.read_csv(LOCAL_VIX_PATH)
+        df = pd.read_csv(path)
         df.columns = [c.strip() for c in df.columns]
-        date_col = next((c for c in df.columns if "date" in c.lower()), None)
-        close_col = next((c for c in df.columns if "close" in c.lower()), None)
-        if not date_col or not close_col:
-            return pd.Series(dtype=float)
+        date_col = next((c for c in df.columns if "date" in c.lower()), df.columns[0])
+        close_col = next((c for c in df.columns if "close" in c.lower() or "vix" in c.lower()), df.columns[-1])
         df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
         df["VIX"] = pd.to_numeric(df[close_col], errors="coerce")
         df = df.dropna(subset=["Date", "VIX"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        print(f"[INFO] Loaded local VIX ({len(df)} rows) from {path}")
         return df.set_index("Date")["VIX"]
     except Exception as e:
-        print(f"[WARN] load_local_vix failed: {e}")
+        print(f"[WARN] load_local_vix failed ({path}): {e}")
         return pd.Series(dtype=float)
 
 
 def load_local_cnn():
-    if not os.path.exists(LOCAL_CNN_PATH):
+    path = find_csv_case_insensitive(["fear", "greed", "cnn"], exclude_names=["history_backtest.csv"])
+    if not path:
+        print("[WARN] Local CNN Fear & Greed CSV not found.")
         return pd.Series(dtype=float)
     try:
-        df = pd.read_csv(LOCAL_CNN_PATH)
+        df = pd.read_csv(path)
         df.columns = [c.strip() for c in df.columns]
-        date_col = next((c for c in df.columns if "date" in c.lower()), None)
-        val_col = next((c for c in df.columns if "fear" in c.lower() or "score" in c.lower() or "value" in c.lower()), None)
-        if not date_col or not val_col:
-            return pd.Series(dtype=float)
+        date_col = next((c for c in df.columns if "date" in c.lower()), df.columns[0])
+        val_col = next(
+            (c for c in df.columns if any(k in c.lower() for k in ["fear", "greed", "score", "value", "cnn", "close"])),
+            df.columns[-1],
+        )
         df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
         df["CNN_FG"] = pd.to_numeric(df[val_col], errors="coerce")
         df = df.dropna(subset=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        print(f"[INFO] Loaded local CNN ({len(df)} rows) from {path}")
         return df.set_index("Date")["CNN_FG"]
     except Exception as e:
-        print(f"[WARN] load_local_cnn failed: {e}")
+        print(f"[WARN] load_local_cnn failed ({path}): {e}")
         return pd.Series(dtype=float)
 
 
 def load_local_aaii():
-    if not os.path.exists(LOCAL_AAII_PATH):
+    path = find_csv_case_insensitive(["aaii", "sentiment"], exclude_names=["history_backtest.csv"])
+    if not path:
+        print("[WARN] Local AAII CSV not found.")
         return pd.Series(dtype=float)
     try:
-        df = pd.read_csv(LOCAL_AAII_PATH)
+        df = pd.read_csv(path)
         df.columns = [c.strip() for c in df.columns]
-        date_col = next((c for c in df.columns if "date" in c.lower()), None)
+        date_col = next((c for c in df.columns if "date" in c.lower()), df.columns[0])
         bear_col = next((c for c in df.columns if "bear" in c.lower()), None)
-        if not date_col or not bear_col:
+        if not bear_col:
             return pd.Series(dtype=float)
         df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
+        df[bear_col] = (
+            df[bear_col]
+            .astype(str)
+            .str.replace("%", "", regex=False)
+            .str.strip()
+        )
         df["AAII_Bearish"] = pd.to_numeric(df[bear_col], errors="coerce")
         df = df.dropna(subset=["Date", "AAII_Bearish"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        # 若原始檔存成 0.45 這種小數格式，自動轉成 45.0 百分比
+        if not df.empty and df["AAII_Bearish"].max() <= 1.0:
+            df["AAII_Bearish"] = df["AAII_Bearish"] * 100.0
+        print(f"[INFO] Loaded local AAII ({len(df)} rows) from {path}")
         return df.set_index("Date")["AAII_Bearish"]
     except Exception as e:
-        print(f"[WARN] load_local_aaii failed: {e}")
+        print(f"[WARN] load_local_aaii failed ({path}): {e}")
         return pd.Series(dtype=float)
 
 
@@ -115,7 +146,11 @@ def fetch_cnn_fear_greed(local_cnn_series):
                 dt = pd.to_datetime(ts, unit="ms").normalize()
                 rows.append((dt, float(val)))
         if rows:
-            df_live = pd.DataFrame(rows, columns=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+            df_live = (
+                pd.DataFrame(rows, columns=["Date", "CNN_FG"])
+                .drop_duplicates(subset=["Date"], keep="last")
+                .sort_values("Date")
+            )
             live_series = df_live.set_index("Date")["CNN_FG"]
     except Exception as e:
         print(f"[WARN] CNN live API fetch failed: {e}")
@@ -237,7 +272,6 @@ def compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now):
         fwd_sp = df["SP500"].shift(-days) / df["SP500"] - 1.0
         fwd_ndx = df["NDX"].shift(-days) / df["NDX"] - 1.0
 
-        # CNN Fear condition (historical subset where CNN_FG exists)
         cnn_thresh = min(max(cnn_now + 3.0, 25.0), 45.0) if cnn_now <= 45 else 45.0
         mask_cnn = df["CNN_FG"].notna() & (df["CNN_FG"] <= cnn_thresh) & fwd_sp.notna()
         if mask_cnn.sum() >= 15:
@@ -246,7 +280,6 @@ def compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now):
             valid_cnn = df["CNN_FG"].notna() & fwd_sp.notna()
             win_cnn = float((fwd_sp[valid_cnn] > 0).mean() * 100.0) if valid_cnn.sum() > 0 else 70.0
 
-        # VIX Fear condition (full 1990-present history)
         vix_thresh = max(min(vix_now - 2.0, 30.0), 20.0) if vix_now >= 20 else 20.0
         mask_vix = df["VIX"].notna() & (df["VIX"] >= vix_thresh) & fwd_sp.notna()
         if mask_vix.sum() >= 15:
@@ -255,7 +288,6 @@ def compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now):
             valid_vix = df["VIX"].notna() & fwd_sp.notna()
             win_vix = float((fwd_sp[valid_vix] > 0).mean() * 100.0) if valid_vix.sum() > 0 else 72.0
 
-        # AAII extreme bearish bonus
         if aaii_bear_now >= 50.0:
             aaii_bonus = 6.0
         elif aaii_bear_now >= 40.0:
@@ -265,7 +297,6 @@ def compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now):
 
         final_win = min(round(0.5 * win_cnn + 0.5 * win_vix + aaii_bonus, 2), 99.5)
 
-        # Analogous historical days for sample size & average returns
         mask_combo = mask_vix if cnn_now > 45 else (mask_cnn | mask_vix)
         if mask_combo.sum() < 10:
             mask_combo = fwd_sp.notna()
@@ -329,6 +360,7 @@ def send_alert_email(payload):
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
+    print("[INFO] Files in root:", os.listdir("."))
 
     local_vix = load_local_vix()
     local_cnn = load_local_cnn()
@@ -358,6 +390,11 @@ def main():
         df["AAII_Bearish"] = aaii_series.reindex(aaii_union).ffill(limit=10).reindex(master_idx)
     else:
         df["AAII_Bearish"] = np.nan
+
+    print(
+        f"[INFO] Final row counts -> VIX: {df['VIX'].notna().sum()}, "
+        f"CNN_FG: {df['CNN_FG'].notna().sum()}, AAII: {df['AAII_Bearish'].notna().sum()}"
+    )
 
     df_export = df.reset_index()
     df_export["Date"] = df_export["Date"].dt.strftime("%Y-%m-%d")
