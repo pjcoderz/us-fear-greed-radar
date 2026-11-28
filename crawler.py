@@ -1,9 +1,7 @@
+import datetime
 import json
 import os
-import re
 import smtplib
-import time
-from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from io import StringIO
@@ -11,744 +9,415 @@ from io import StringIO
 import numpy as np
 import pandas as pd
 import requests
-import urllib3
 import yfinance as yf
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-WIN_RATE_ALERT_THRESHOLD = 90.0
-DEFAULT_ALERT_HORIZON = "126D"
 
 DATA_DIR = "data"
 JSON_PATH = os.path.join(DATA_DIR, "sentiment_data.json")
 CSV_PATH = os.path.join(DATA_DIR, "history_backtest.csv")
-AAII_HISTORY_CSV_PATH = os.path.join(DATA_DIR, "aaii_history.csv")
 
-# 本地歷史檔候選路徑（支援放在專案根目錄或 data/ 下）
-VIX_LOCAL_CANDIDATES = [
-    os.path.join(DATA_DIR, "VIX_History.csv"),
-    "VIX_History.csv",
-]
-FG_LOCAL_CANDIDATES = [
-    os.path.join(DATA_DIR, "fear-greed.csv"),
-    "fear-greed.csv",
-]
-AAII_LOCAL_CANDIDATES = [
-    AAII_HISTORY_CSV_PATH,
-    "aaii_history.csv",
-]
-
-GMAIL_USER = os.getenv("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
-RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", GMAIL_USER)
+LOCAL_VIX_PATH = "VIX_History.csv"
+LOCAL_CNN_PATH = "fear-greed.csv"
+LOCAL_AAII_PATH = "aaii_history.csv"
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/json, text/html, text/csv, */*",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://edition.cnn.com/",
 }
 
 
-def safe_request(url, retries=3, timeout=15):
-    for attempt in range(retries):
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=timeout, verify=False)
-            resp.raise_for_status()
-            if resp.text and len(resp.text.strip()) > 0:
-                return resp
-        except Exception as e:
-            print("[Warn] Request retry", attempt + 1, url, str(e))
-            time.sleep(2 * (attempt + 1))
-    return None
-
-
-def _parse_float(val, min_val=None, max_val=None):
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s or s.lower() in ("nan", "none", "null", "-", "--", "n/a", ""):
-        return None
-    cleaned = re.sub(r"[^0-9.\-]", "", s)
-    if not cleaned or cleaned in (".", "-"):
-        return None
+def load_local_vix():
+    if not os.path.exists(LOCAL_VIX_PATH):
+        return pd.Series(dtype=float)
     try:
-        num = float(cleaned)
-        if np.isnan(num) or np.isinf(num):
-            return None
-        if min_val is not None and num < min_val:
-            return None
-        if max_val is not None and num > max_val:
-            return None
-        return round(num, 2)
-    except Exception:
-        return None
-
-
-def _find_existing_file(candidates):
-    for path in candidates:
-        if path and os.path.exists(path):
-            return path
-    return None
-
-
-def _parse_fg_df(df):
-    if df is None or df.empty:
-        return pd.Series(dtype=float)
-    cols_map = {str(c).strip().lower(): c for c in df.columns}
-    date_col = cols_map.get("date", df.columns[0])
-    val_col = cols_map.get("fear greed", cols_map.get("cnn_fg", df.columns[1] if len(df.columns) > 1 else None))
-    if val_col is None:
+        df = pd.read_csv(LOCAL_VIX_PATH)
+        df.columns = [c.strip() for c in df.columns]
+        date_col = next((c for c in df.columns if "date" in c.lower()), None)
+        close_col = next((c for c in df.columns if "close" in c.lower()), None)
+        if not date_col or not close_col:
+            return pd.Series(dtype=float)
+        df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
+        df["VIX"] = pd.to_numeric(df[close_col], errors="coerce")
+        df = df.dropna(subset=["Date", "VIX"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        return df.set_index("Date")["VIX"]
+    except Exception as e:
+        print(f"[WARN] load_local_vix failed: {e}")
         return pd.Series(dtype=float)
 
-    out = pd.DataFrame({
-        "Date": pd.to_datetime(df[date_col], errors="coerce").dt.tz_localize(None).dt.normalize(),
-        "CNN_FG": pd.to_numeric(df[val_col], errors="coerce"),
-    }).dropna(subset=["Date", "CNN_FG"])
 
-    out = out[(out["CNN_FG"] >= 0.0) & (out["CNN_FG"] <= 100.0)]
-    if out.empty:
+def load_local_cnn():
+    if not os.path.exists(LOCAL_CNN_PATH):
         return pd.Series(dtype=float)
-    out = out.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-    return out.set_index("Date")["CNN_FG"]
+    try:
+        df = pd.read_csv(LOCAL_CNN_PATH)
+        df.columns = [c.strip() for c in df.columns]
+        date_col = next((c for c in df.columns if "date" in c.lower()), None)
+        val_col = next((c for c in df.columns if "fear" in c.lower() or "score" in c.lower() or "value" in c.lower()), None)
+        if not date_col or not val_col:
+            return pd.Series(dtype=float)
+        df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
+        df["CNN_FG"] = pd.to_numeric(df[val_col], errors="coerce")
+        df = df.dropna(subset=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        return df.set_index("Date")["CNN_FG"]
+    except Exception as e:
+        print(f"[WARN] load_local_cnn failed: {e}")
+        return pd.Series(dtype=float)
 
 
-def fetch_cnn_data():
+def load_local_aaii():
+    if not os.path.exists(LOCAL_AAII_PATH):
+        return pd.Series(dtype=float)
+    try:
+        df = pd.read_csv(LOCAL_AAII_PATH)
+        df.columns = [c.strip() for c in df.columns]
+        date_col = next((c for c in df.columns if "date" in c.lower()), None)
+        bear_col = next((c for c in df.columns if "bear" in c.lower()), None)
+        if not date_col or not bear_col:
+            return pd.Series(dtype=float)
+        df["Date"] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
+        df["AAII_Bearish"] = pd.to_numeric(df[bear_col], errors="coerce")
+        df = df.dropna(subset=["Date", "AAII_Bearish"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        return df.set_index("Date")["AAII_Bearish"]
+    except Exception as e:
+        print(f"[WARN] load_local_aaii failed: {e}")
+        return pd.Series(dtype=float)
+
+
+def fetch_cnn_fear_greed(local_cnn_series):
     url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-    resp = safe_request(url)
-
-    score = None
-    rating = "fear"
+    live_series = pd.Series(dtype=float)
+    current_score = None
+    rating = "Unknown"
     prev_close = None
-    s_recent = pd.Series(dtype=float)
 
-    if resp:
-        try:
-            data = resp.json()
-            fg = data.get("fear_and_greed", {})
-            score = _parse_float(fg.get("score"), 0, 100)
-            rating = str(fg.get("rating", "fear")).lower()
-            prev_close = _parse_float(fg.get("previous_close"), 0, 100)
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
 
-            hist_list = data.get("fear_and_greed_historical", {}).get("data", [])
-            if hist_list:
-                tmp = pd.DataFrame(hist_list)
-                if "x" in tmp.columns and "y" in tmp.columns:
-                    tmp["Date"] = (
-                        pd.to_datetime(tmp["x"], unit="ms", errors="coerce")
-                        .dt.tz_localize(None)
-                        .dt.normalize()
-                    )
-                    tmp["CNN_FG"] = pd.to_numeric(tmp["y"], errors="coerce")
-                    tmp = tmp.dropna(subset=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-                    if not tmp.empty:
-                        s_recent = tmp.set_index("Date")["CNN_FG"]
-        except Exception as e:
-            print("[Warn] CNN parse:", str(e))
+        fg = data.get("fear_and_greed", {})
+        if fg.get("score") is not None:
+            current_score = round(float(fg["score"]), 2)
+        rating = str(fg.get("rating", "Unknown"))
+        if fg.get("previous_close") is not None:
+            prev_close = round(float(fg["previous_close"]), 2)
 
-    s_local = pd.Series(dtype=float)
-    local_fg_path = _find_existing_file(FG_LOCAL_CANDIDATES)
-    if local_fg_path:
-        try:
-            s_local = _parse_fg_df(pd.read_csv(local_fg_path))
-            print("[Info] Loaded local CNN history rows:", len(s_local), "from", local_fg_path)
-        except Exception as e:
-            print("[Warn] Local CNN CSV:", str(e))
+        hist_list = data.get("fear_and_greed_historical", {}).get("data", [])
+        rows = []
+        for item in hist_list:
+            ts = item.get("x")
+            val = item.get("y")
+            if ts is not None and val is not None:
+                dt = pd.to_datetime(ts, unit="ms").normalize()
+                rows.append((dt, float(val)))
+        if rows:
+            df_live = pd.DataFrame(rows, columns=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+            live_series = df_live.set_index("Date")["CNN_FG"]
+    except Exception as e:
+        print(f"[WARN] CNN live API fetch failed: {e}")
 
-    s_arch = pd.Series(dtype=float)
-    archive_url = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv"
-    resp_arch = safe_request(archive_url)
-    if resp_arch:
-        try:
-            s_arch = _parse_fg_df(pd.read_csv(StringIO(resp_arch.text)))
-        except Exception as e:
-            print("[Warn] CNN archive parse:", str(e))
-
-    # 合併順序：本地歷史檔 -> GitHub 存檔 -> 線上即時歷史（最新值覆蓋舊值）
-    combined = pd.concat([s_local, s_arch, s_recent])
-    combined = combined[~combined.index.isna()].sort_index()
-    combined = combined[~combined.index.duplicated(keep="last")]
+    combined = pd.concat([local_cnn_series, live_series])
+    combined = combined[~combined.index.duplicated(keep="last")].sort_index()
 
     if not combined.empty:
-        if score is None:
-            score = round(float(combined.iloc[-1]), 2)
+        if current_score is None:
+            current_score = round(float(combined.iloc[-1]), 2)
         if prev_close is None and len(combined) >= 2:
             prev_close = round(float(combined.iloc[-2]), 2)
-        df_cnn = combined.to_frame(name="CNN_FG")
-    else:
-        df_cnn = pd.DataFrame(columns=["CNN_FG"])
-
-    if score is None:
-        score = 20.0
-    if prev_close is None:
-        prev_close = score
-
-    return {"score": score, "rating": rating, "prev_close": prev_close}, df_cnn
-
-
-def _load_local_vix_series():
-    vix_path = _find_existing_file(VIX_LOCAL_CANDIDATES)
-    if not vix_path:
-        return pd.Series(dtype=float)
-    try:
-        df = pd.read_csv(vix_path)
-        cols_map = {str(c).strip().lower(): c for c in df.columns}
-        date_col = cols_map.get("date", df.columns[0])
-        close_col = cols_map.get("close", cols_map.get("vix", df.columns[4] if len(df.columns) > 4 else None))
-        if close_col is None:
-            return pd.Series(dtype=float)
-        out = pd.DataFrame({
-            "Date": pd.to_datetime(df[date_col], errors="coerce").dt.tz_localize(None).dt.normalize(),
-            "VIX": pd.to_numeric(df[close_col], errors="coerce"),
-        }).dropna(subset=["Date", "VIX"])
-        out = out.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-        print("[Info] Loaded local VIX rows:", len(out), "from", vix_path)
-        return out.set_index("Date")["VIX"]
-    except Exception as e:
-        print("[Warn] Local VIX CSV:", str(e))
-        return pd.Series(dtype=float)
-
-
-def _fetch_stooq_series(symbol, start_date="1990-01-01"):
-    url = "https://stooq.com/q/d/l/?s=" + symbol + "&i=d"
-    resp = safe_request(url)
-    if not resp:
-        return pd.Series(dtype=float)
-    try:
-        df = pd.read_csv(StringIO(resp.text))
-        if "Date" not in df.columns or "Close" not in df.columns:
-            return pd.Series(dtype=float)
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.tz_localize(None).dt.normalize()
-        df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-        df = (
-            df.dropna(subset=["Date", "Close"])
-            .drop_duplicates(subset=["Date"], keep="last")
-            .sort_values("Date")
-        )
-        df = df[df["Date"] >= start_date]
-        return df.set_index("Date")["Close"]
-    except Exception as e:
-        print("[Warn] Stooq series:", symbol, str(e))
-        return pd.Series(dtype=float)
-
-
-def _extract_ticker_close(raw_df, ticker):
-    if raw_df is None or raw_df.empty:
-        return pd.Series(dtype=float)
-    try:
-        if isinstance(raw_df.columns, pd.MultiIndex):
-            if "Close" in raw_df.columns.get_level_values(0):
-                sub = raw_df["Close"]
-                if isinstance(sub, pd.DataFrame) and ticker in sub.columns:
-                    s = sub[ticker]
-                elif isinstance(sub, pd.Series):
-                    s = sub
-                else:
-                    s = pd.Series(dtype=float)
+        if prev_close is None:
+            prev_close = current_score
+        if rating == "Unknown":
+            if current_score <= 25:
+                rating = "Extreme Fear"
+            elif current_score <= 45:
+                rating = "Fear"
+            elif current_score <= 55:
+                rating = "Neutral"
+            elif current_score <= 75:
+                rating = "Greed"
             else:
-                s = pd.Series(dtype=float)
-        else:
-            if ticker in raw_df.columns:
-                s = raw_df[ticker]
-            elif "Close" in raw_df.columns:
-                s = raw_df["Close"]
-            else:
-                s = pd.Series(dtype=float)
-
-        if s.empty:
-            return pd.Series(dtype=float)
-        s.index = pd.to_datetime(s.index, errors="coerce").tz_localize(None).normalize()
-        s = pd.to_numeric(s, errors="coerce").dropna()
-        s = s[~s.index.isna()].sort_index()
-        return s[~s.index.duplicated(keep="last")]
-    except Exception as e:
-        print("[Warn] Extract ticker:", ticker, str(e))
-        return pd.Series(dtype=float)
-
-
-def fetch_vix_and_benchmarks():
-    start_date = "1990-01-01"
-    vix_local = _load_local_vix_series()
-    vix_live = pd.Series(dtype=float)
-    sp_s = pd.Series(dtype=float)
-    ndx_s = pd.Series(dtype=float)
-
-    try:
-        raw = yf.download(
-            ["^VIX", "^GSPC", "^NDX"],
-            start=start_date,
-            progress=False,
-            auto_adjust=True,
-        )
-        vix_live = _extract_ticker_close(raw, "^VIX")
-        sp_s = _extract_ticker_close(raw, "^GSPC")
-        ndx_s = _extract_ticker_close(raw, "^NDX")
-    except Exception as e:
-        print("[Warn] yfinance:", str(e))
-
-    if vix_live.empty:
-        vix_live = _fetch_stooq_series("^vix", start_date=start_date)
-    if sp_s.empty:
-        sp_s = _fetch_stooq_series("^spx", start_date=start_date)
-    if ndx_s.empty:
-        ndx_s = _fetch_stooq_series("^ndx", start_date=start_date)
-
-    # 合併本地 VIX_History.csv 與最新線上 VIX
-    vix_merged = pd.concat([vix_local, vix_live])
-    vix_merged = vix_merged[~vix_merged.index.isna()].sort_index()
-    vix_merged = vix_merged[~vix_merged.index.duplicated(keep="last")]
-
-    # 若既有 history_backtest.csv 有歷史 SP500/NDX，作為早期基準備援
-    old_sp = pd.Series(dtype=float)
-    old_ndx = pd.Series(dtype=float)
-    if os.path.exists(CSV_PATH):
-        try:
-            old_csv = pd.read_csv(CSV_PATH)
-            old_csv["dt"] = pd.to_datetime(old_csv["Date"], errors="coerce").dt.tz_localize(None).dt.normalize()
-            old_csv = old_csv.dropna(subset=["dt"]).drop_duplicates(subset=["dt"], keep="last").set_index("dt").sort_index()
-            if "SP500" in old_csv.columns:
-                old_sp = pd.to_numeric(old_csv["SP500"], errors="coerce").dropna()
-            if "NDX" in old_csv.columns:
-                old_ndx = pd.to_numeric(old_csv["NDX"], errors="coerce").dropna()
-        except Exception as e:
-            print("[Warn] CSV fallback:", str(e))
-
-    sp_all = pd.concat([old_sp, sp_s])
-    sp_all = sp_all[~sp_all.index.isna()].sort_index()
-    sp_all = sp_all[~sp_all.index.duplicated(keep="last")]
-
-    ndx_all = pd.concat([old_ndx, ndx_s])
-    ndx_all = ndx_all[~ndx_all.index.isna()].sort_index()
-    ndx_all = ndx_all[~ndx_all.index.duplicated(keep="last")]
-
-    if vix_merged.empty:
-        raise RuntimeError("VIX data empty from all sources.")
-
-    df_mkt = pd.DataFrame({"VIX": vix_merged}, index=vix_merged.index)
-    if not sp_all.empty:
-        df_mkt["SP500"] = sp_all.reindex(df_mkt.index)
+                rating = "Extreme Greed"
     else:
-        df_mkt["SP500"] = np.nan
+        current_score = 50.0
+        prev_close = 50.0
+        rating = "Neutral"
 
-    if not ndx_all.empty:
-        df_mkt["NDX"] = ndx_all.reindex(df_mkt.index)
-    else:
-        df_mkt["NDX"] = df_mkt["SP500"]
-
-    df_mkt = df_mkt.sort_index()
-    vix_now = round(float(df_mkt["VIX"].iloc[-1]), 2)
-    vix_prev = round(float(df_mkt["VIX"].iloc[-2]), 2) if len(df_mkt) >= 2 else vix_now
-    sp_valid = df_mkt["SP500"].dropna()
-    sp500_now = round(float(sp_valid.iloc[-1]), 2) if not sp_valid.empty else 0.0
-
-    return {"vix": vix_now, "vix_prev": vix_prev, "sp500": sp500_now}, df_mkt
-
-
-def _parse_aaii_date(raw_str):
-    if not raw_str:
-        return pd.NaT
-    s = str(raw_str).strip()
-    dt = pd.to_datetime(s, errors="coerce")
-    if pd.isna(dt):
-        cur_year = datetime.now(timezone.utc).year
-        dt = pd.to_datetime(s + " " + str(cur_year), errors="coerce")
-    if pd.notna(dt):
-        return dt.tz_localize(None).normalize()
-    return pd.NaT
-
-
-def _normalize_aaii_df(df_raw):
-    if df_raw is None or df_raw.empty:
-        return pd.DataFrame(columns=["Date", "Bullish", "Neutral", "Bearish"])
-
-    cols_map = {str(c).strip().lower(): c for c in df_raw.columns}
-    date_col = cols_map.get("date", df_raw.columns[0])
-    bear_col = cols_map.get("bearish", df_raw.columns[3] if len(df_raw.columns) > 3 else None)
-    bull_col = cols_map.get("bullish")
-    neut_col = cols_map.get("neutral")
-
-    if bear_col is None:
-        return pd.DataFrame(columns=["Date", "Bullish", "Neutral", "Bearish"])
-
-    out = pd.DataFrame()
-    out["Date"] = df_raw[date_col].apply(_parse_aaii_date)
-    out["Bearish"] = df_raw[bear_col].apply(lambda x: _parse_float(x, 0, 100))
-
-    if not out["Bearish"].dropna().empty and out["Bearish"].dropna().max() <= 1.0:
-        out["Bearish"] = (out["Bearish"] * 100.0).round(2)
-
-    if bull_col is not None:
-        out["Bullish"] = df_raw[bull_col].apply(lambda x: _parse_float(x, 0, 100))
-        if not out["Bullish"].dropna().empty and out["Bullish"].dropna().max() <= 1.0:
-            out["Bullish"] = (out["Bullish"] * 100.0).round(2)
-    else:
-        out["Bullish"] = np.nan
-
-    if neut_col is not None:
-        out["Neutral"] = df_raw[neut_col].apply(lambda x: _parse_float(x, 0, 100))
-        if not out["Neutral"].dropna().empty and out["Neutral"].dropna().max() <= 1.0:
-            out["Neutral"] = (out["Neutral"] * 100.0).round(2)
-    else:
-        out["Neutral"] = np.nan
-
-    out = (
-        out.dropna(subset=["Date", "Bearish"])
-        .drop_duplicates(subset=["Date"], keep="last")
-        .sort_values("Date")
-        .reset_index(drop=True)
-    )
-    return out
-
-
-def fetch_aaii_data():
-    url = "https://www.aaii.com/sentimentsurvey/sent_results"
-    resp = safe_request(url)
-    hist_records = []
-
-    if resp:
-        try:
-            tables = pd.read_html(StringIO(resp.text))
-            for tbl in tables:
-                df = tbl.dropna(how="all")
-                for _, row in df.iterrows():
-                    vals = [str(x).strip() for x in row.tolist()]
-                    pct_nums = []
-                    for v in vals:
-                        if "%" in v:
-                            parsed = _parse_float(v, 0.0, 100.0)
-                            if parsed is not None:
-                                pct_nums.append(parsed)
-                    if len(pct_nums) >= 3:
-                        bullish, neutral, bearish = pct_nums[0], pct_nums[1], pct_nums[2]
-                        dt_val = _parse_aaii_date(vals[0] if vals else "")
-                        hist_records.append({
-                            "Date": dt_val,
-                            "date_str": vals[0] if vals else "Latest",
-                            "bullish": bullish,
-                            "neutral": neutral,
-                            "bearish": bearish,
-                            "spread": round(bullish - bearish, 2),
-                        })
-        except Exception as e:
-            print("[Warn] AAII HTML:", str(e))
-
-    frames = []
-    local_aaii_path = _find_existing_file(AAII_LOCAL_CANDIDATES)
-    if local_aaii_path:
-        try:
-            local_df = pd.read_csv(local_aaii_path)
-            norm_local = _normalize_aaii_df(local_df)
-            if not norm_local.empty:
-                frames.append(norm_local)
-                print("[Info] Loaded local AAII history rows:", len(norm_local), "from", local_aaii_path)
-        except Exception as e:
-            print("[Warn] Local AAII history CSV:", str(e))
-
-    backup_urls = [
-        "https://raw.githubusercontent.com/datasets/aaii-sentiment/main/data/aaii-sentiment.csv",
-        "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/aaii-sentiment.csv",
-    ]
-    latest_from_backup = None
-
-    for b_url in backup_urls:
-        b_resp = safe_request(b_url)
-        if b_resp:
-            try:
-                bdf = pd.read_csv(StringIO(b_resp.text)).dropna(how="all")
-                norm_b = _normalize_aaii_df(bdf)
-                if not norm_b.empty:
-                    frames.append(norm_b)
-                    last = norm_b.iloc[-1]
-                    bull_val = float(last["Bullish"]) if pd.notna(last["Bullish"]) else 37.5
-                    neut_val = float(last["Neutral"]) if pd.notna(last["Neutral"]) else round(max(0.0, 100.0 - bull_val - float(last["Bearish"])), 2)
-                    bear_val = float(last["Bearish"])
-                    latest_from_backup = {
-                        "date": str(last["Date"].strftime("%Y-%m-%d")),
-                        "bullish": round(bull_val, 2),
-                        "neutral": round(neut_val, 2),
-                        "bearish": round(bear_val, 2),
-                        "spread": round(bull_val - bear_val, 2),
-                    }
-            except Exception as e:
-                print("[Warn] AAII backup:", str(e))
-
-    latest_obj = None
-    if hist_records:
-        first_rec = hist_records[0]
-        dt_iso = first_rec["Date"].strftime("%Y-%m-%d") if pd.notna(first_rec["Date"]) else first_rec["date_str"]
-        latest_obj = {
-            "date": dt_iso,
-            "bullish": first_rec["bullish"],
-            "neutral": first_rec["neutral"],
-            "bearish": first_rec["bearish"],
-            "spread": first_rec["spread"],
-        }
-        df_web = pd.DataFrame(hist_records).dropna(subset=["Date"])
-        if not df_web.empty:
-            web_norm = pd.DataFrame({
-                "Date": df_web["Date"],
-                "Bullish": df_web["bullish"],
-                "Neutral": df_web["neutral"],
-                "Bearish": df_web["bearish"],
-            })
-            frames.append(_normalize_aaii_df(web_norm))
-
-    if latest_obj is None:
-        latest_obj = latest_from_backup
-
-    if latest_obj is not None:
-        parsed_latest_dt = _parse_aaii_date(latest_obj.get("date"))
-        if pd.notna(parsed_latest_dt):
-            frames.append(
-                pd.DataFrame([{
-                    "Date": parsed_latest_dt,
-                    "Bullish": latest_obj.get("bullish"),
-                    "Neutral": latest_obj.get("neutral"),
-                    "Bearish": latest_obj.get("bearish"),
-                }])
-            )
-
-    if frames:
-        merged_all = (
-            pd.concat(frames, ignore_index=True)
-            .dropna(subset=["Date", "Bearish"])
-            .sort_values("Date")
-        )
-        merged_all = merged_all.groupby("Date", as_index=False).agg({
-            "Bullish": "last",
-            "Neutral": "last",
-            "Bearish": "last",
-        })
-        save_df = merged_all.copy()
-        save_df["Date"] = save_df["Date"].dt.strftime("%Y-%m-%d")
-        save_df.to_csv(AAII_HISTORY_CSV_PATH, index=False, encoding="utf-8-sig")
-
-        aaii_series = merged_all.set_index("Date")[["Bearish"]].rename(columns={"Bearish": "AAII_Bearish"})
-        return latest_obj, aaii_series
-
-    return latest_obj, pd.DataFrame(columns=["AAII_Bearish"])
-
-
-def evaluate_lights(cnn_score, vix_val, aaii_bearish):
-    cnn_level = "green" if cnn_score <= 25 else ("yellow" if cnn_score <= 45 else "red")
-    vix_level = "green" if vix_val >= 30 else ("yellow" if vix_val >= 22 else "red")
-    aaii_level = "green" if aaii_bearish >= 50 else ("yellow" if aaii_bearish >= 40 else "red")
-    green_count = [cnn_level, vix_level, aaii_level].count("green")
     return {
-        "cnn_level": cnn_level,
-        "vix_level": vix_level,
-        "aaii_level": aaii_level,
-        "green_count": green_count,
+        "score": current_score,
+        "rating": rating,
+        "prev_close": prev_close,
+        "series": combined,
     }
 
 
-def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, df_aaii_hist):
-    df = df_mkt.copy().sort_index()
+def fetch_aaii_sentiment(local_aaii_series):
+    latest = {
+        "date": str(local_aaii_series.index.max().date()) if not local_aaii_series.empty else "N/A",
+        "bullish": 35.0,
+        "neutral": 30.0,
+        "bearish": round(float(local_aaii_series.iloc[-1]), 2) if not local_aaii_series.empty else 35.0,
+    }
+    latest["spread"] = round(latest["bullish"] - latest["bearish"], 2)
+    live_series = pd.Series(dtype=float)
 
-    # CNN：只對齊真實存在的日期，不回填尚未有資料的早期區間
-    if df_cnn is not None and not df_cnn.empty:
-        df = df.join(df_cnn[["CNN_FG"]], how="left")
-    else:
-        df["CNN_FG"] = np.nan
+    try:
+        resp = requests.get("https://www.aaii.com/sentimentsurvey/sent_results", headers=HEADERS, timeout=20)
+        if resp.status_code == 200:
+            tables = pd.read_html(StringIO(resp.text))
+            for tbl in tables:
+                cols = [str(c).lower() for c in tbl.columns]
+                if any("bull" in c for c in cols) and any("bear" in c for c in cols):
+                    tbl.columns = [str(c).strip() for c in tbl.columns]
+                    date_col = tbl.columns[0]
+                    bull_col = next(c for c in tbl.columns if "bull" in c.lower())
+                    neut_col = next(c for c in tbl.columns if "neut" in c.lower())
+                    bear_col = next(c for c in tbl.columns if "bear" in c.lower())
 
-    # AAII：僅做前向填補（最多 10 天），不做 bfill 與早期回填
-    if df_aaii_hist is not None and not df_aaii_hist.empty:
-        combined_idx = df.index.union(df_aaii_hist.index).sort_values()
-        s_aaii = df_aaii_hist["AAII_Bearish"].reindex(combined_idx).ffill(limit=10)
-        df["AAII_Bearish"] = s_aaii.reindex(df.index)
-    else:
-        df["AAII_Bearish"] = np.nan
+                    sub = tbl[[date_col, bull_col, neut_col, bear_col]].copy()
+                    sub["Date"] = pd.to_datetime(sub[date_col], errors="coerce").dt.normalize()
+                    for col in [bull_col, neut_col, bear_col]:
+                        sub[col] = (
+                            sub[col]
+                            .astype(str)
+                            .str.replace("%", "", regex=False)
+                            .str.strip()
+                        )
+                        sub[col] = pd.to_numeric(sub[col], errors="coerce")
+                    sub = sub.dropna(subset=["Date", bear_col]).sort_values("Date")
+                    if not sub.empty:
+                        last_row = sub.iloc[-1]
+                        latest = {
+                            "date": str(last_row["Date"].date()),
+                            "bullish": round(float(last_row[bull_col]), 2),
+                            "neutral": round(float(last_row[neut_col]), 2),
+                            "bearish": round(float(last_row[bear_col]), 2),
+                            "spread": round(float(last_row[bull_col] - last_row[bear_col]), 2),
+                        }
+                        live_series = sub.drop_duplicates(subset=["Date"], keep="last").set_index("Date")[bear_col]
+                        break
+    except Exception as e:
+        print(f"[WARN] AAII live scrape skipped: {e}")
 
-    horizon_days = {"21D": 21, "63D": 63, "126D": 126, "252D": 252}
+    combined = pd.concat([local_aaii_series, live_series])
+    combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+    if not combined.empty and latest["date"] == "N/A":
+        latest["date"] = str(combined.index.max().date())
+        latest["bearish"] = round(float(combined.iloc[-1]), 2)
+        latest["spread"] = round(latest["bullish"] - latest["bearish"], 2)
 
-    aaii_bonus = 0.0
-    if aaii_now["bearish"] >= 55.0:
-        aaii_bonus = 5.0
-    elif aaii_now["bearish"] >= 50.0:
-        aaii_bonus = 3.0
-    elif aaii_now["bearish"] >= 45.0:
-        aaii_bonus = 1.5
+    return latest, combined
 
-    results = {}
-    for code, days in horizon_days.items():
-        temp = df.copy()
-        temp["SP_Fwd"] = temp["SP500"].shift(-days) / temp["SP500"] - 1.0
-        temp["NDX_Fwd"] = temp["NDX"].shift(-days) / temp["NDX"] - 1.0
-        valid_sp = temp.dropna(subset=["SP_Fwd"])
 
-        if valid_sp.empty:
-            results[code] = {
-                "days": days,
-                "final_win_rate": 50.0,
-                "win_cnn": 50.0,
-                "win_vix": 50.0,
-                "aaii_bonus": aaii_bonus,
-                "sp_avg_ret": 0.0,
-                "ndx_avg_ret": 0.0,
-                "sample_size": 0,
-            }
-            continue
-
-        valid_cnn = valid_sp.dropna(subset=["CNN_FG"])
-        valid_vix = valid_sp.dropna(subset=["VIX"])
-
-        cond_cnn = valid_cnn[valid_cnn["CNN_FG"] <= max(cnn_now, 5)]
-        cond_vix = valid_vix[valid_vix["VIX"] >= min(vix_now, 45)]
-        cond_combo = valid_cnn[
-            (valid_cnn["CNN_FG"] <= max(cnn_now, 10)) & (valid_cnn["VIX"] >= min(vix_now, 35))
-        ]
-
-        win_cnn = round(float((cond_cnn["SP_Fwd"] > 0).mean() * 100), 2) if len(cond_cnn) else 50.0
-        win_vix = round(float((cond_vix["SP_Fwd"] > 0).mean() * 100), 2) if len(cond_vix) else 50.0
-
-        if len(cond_combo) >= 10:
-            base_win = float((cond_combo["SP_Fwd"] > 0).mean() * 100)
-            sp_avg_ret = float(cond_combo["SP_Fwd"].mean() * 100)
-            ndx_avg_ret = float(cond_combo["NDX_Fwd"].dropna().mean() * 100) if not cond_combo["NDX_Fwd"].dropna().empty else 0.0
-            samples = int(len(cond_combo))
+def download_close_series(ticker, start_date="1990-01-01"):
+    try:
+        df = yf.download(ticker, start=start_date, progress=False, auto_adjust=True)
+        if df is None or df.empty:
+            return pd.Series(dtype=float)
+        if isinstance(df.columns, pd.MultiIndex):
+            s = df["Close"][ticker]
         else:
-            sp_rets = [
-                x
-                for x in [
-                    cond_cnn["SP_Fwd"].mean() if len(cond_cnn) else np.nan,
-                    cond_vix["SP_Fwd"].mean() if len(cond_vix) else np.nan,
-                ]
-                if not np.isnan(x)
-            ]
-            ndx_rets = [
-                x
-                for x in [
-                    cond_cnn["NDX_Fwd"].dropna().mean() if (len(cond_cnn) and not cond_cnn["NDX_Fwd"].dropna().empty) else np.nan,
-                    cond_vix["NDX_Fwd"].dropna().mean() if (len(cond_vix) and not cond_vix["NDX_Fwd"].dropna().empty) else np.nan,
-                ]
-                if not np.isnan(x)
-            ]
-            base_win = float(np.mean([win_cnn, win_vix]))
-            sp_avg_ret = float(np.mean(sp_rets) * 100) if sp_rets else 0.0
-            ndx_avg_ret = float(np.mean(ndx_rets) * 100) if ndx_rets else 0.0
-            samples = int(len(cond_cnn) + len(cond_vix))
+            s = df["Close"]
+        s.index = pd.to_datetime(s.index).tz_localize(None).normalize()
+        s = pd.to_numeric(s, errors="coerce").dropna().sort_index()
+        return s[~s.index.duplicated(keep="last")]
+    except Exception as e:
+        print(f"[WARN] yfinance download failed for {ticker}: {e}")
+        return pd.Series(dtype=float)
 
-        final_win = min(99.9, round(base_win + aaii_bonus, 2))
+
+def compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now):
+    horizons = {"21D": 21, "63D": 63, "126D": 126, "252D": 252}
+    results = {}
+
+    for code, days in horizons.items():
+        fwd_sp = df["SP500"].shift(-days) / df["SP500"] - 1.0
+        fwd_ndx = df["NDX"].shift(-days) / df["NDX"] - 1.0
+
+        # CNN Fear condition (historical subset where CNN_FG exists)
+        cnn_thresh = min(max(cnn_now + 3.0, 25.0), 45.0) if cnn_now <= 45 else 45.0
+        mask_cnn = df["CNN_FG"].notna() & (df["CNN_FG"] <= cnn_thresh) & fwd_sp.notna()
+        if mask_cnn.sum() >= 15:
+            win_cnn = float((fwd_sp[mask_cnn] > 0).mean() * 100.0)
+        else:
+            valid_cnn = df["CNN_FG"].notna() & fwd_sp.notna()
+            win_cnn = float((fwd_sp[valid_cnn] > 0).mean() * 100.0) if valid_cnn.sum() > 0 else 70.0
+
+        # VIX Fear condition (full 1990-present history)
+        vix_thresh = max(min(vix_now - 2.0, 30.0), 20.0) if vix_now >= 20 else 20.0
+        mask_vix = df["VIX"].notna() & (df["VIX"] >= vix_thresh) & fwd_sp.notna()
+        if mask_vix.sum() >= 15:
+            win_vix = float((fwd_sp[mask_vix] > 0).mean() * 100.0)
+        else:
+            valid_vix = df["VIX"].notna() & fwd_sp.notna()
+            win_vix = float((fwd_sp[valid_vix] > 0).mean() * 100.0) if valid_vix.sum() > 0 else 72.0
+
+        # AAII extreme bearish bonus
+        if aaii_bear_now >= 50.0:
+            aaii_bonus = 6.0
+        elif aaii_bear_now >= 40.0:
+            aaii_bonus = 3.0
+        else:
+            aaii_bonus = 1.5
+
+        final_win = min(round(0.5 * win_cnn + 0.5 * win_vix + aaii_bonus, 2), 99.5)
+
+        # Analogous historical days for sample size & average returns
+        mask_combo = mask_vix if cnn_now > 45 else (mask_cnn | mask_vix)
+        if mask_combo.sum() < 10:
+            mask_combo = fwd_sp.notna()
+
+        sp_avg = float(fwd_sp[mask_combo].mean() * 100.0) if mask_combo.sum() > 0 else 0.0
+        ndx_valid = mask_combo & fwd_ndx.notna()
+        ndx_avg = float(fwd_ndx[ndx_valid].mean() * 100.0) if ndx_valid.sum() > 0 else sp_avg
+
         results[code] = {
-            "days": days,
             "final_win_rate": final_win,
-            "win_cnn": win_cnn,
-            "win_vix": win_vix,
-            "aaii_bonus": aaii_bonus,
-            "sp_avg_ret": round(sp_avg_ret, 2),
-            "ndx_avg_ret": round(ndx_avg_ret, 2),
-            "sample_size": samples,
+            "win_cnn": round(win_cnn, 2),
+            "win_vix": round(win_vix, 2),
+            "aaii_bonus": round(aaii_bonus, 2),
+            "sp_avg_ret": round(sp_avg, 2),
+            "ndx_avg_ret": round(ndx_avg, 2),
+            "sample_size": int(mask_combo.sum()),
         }
 
-    # 輸出完整歷史序列（保留 NaN 讓圖表在無資料區間自然留白）
-    full_hist = df.reset_index()
-    date_col = full_hist.columns[0]
-    full_hist["Date"] = pd.to_datetime(full_hist[date_col]).dt.strftime("%Y-%m-%d")
-    return results, full_hist[["Date", "CNN_FG", "VIX", "AAII_Bearish", "SP500", "NDX"]]
+    return results
 
 
 def send_alert_email(payload):
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print("[Skip Email] Missing GMAIL_USER or GMAIL_APP_PASSWORD.")
+    gmail_user = os.environ.get("GMAIL_USER", "").strip()
+    gmail_pass = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+    recipient = os.environ.get("ALERT_RECIPIENT", gmail_user).strip()
+
+    if not gmail_user or not gmail_pass or not recipient:
+        print("[INFO] Email credentials not set; skipping alert email.")
         return
 
-    target = payload["win_rates"][DEFAULT_ALERT_HORIZON]
-    cnn = payload["cnn"]
-    vix = payload["vix"]
-    aaii = payload["aaii"]
-    lights = payload["lights"]
+    win_126 = payload["win_rates"]["126D"]["final_win_rate"]
+    threshold = payload.get("alert_threshold", 90.0)
+    if win_126 < threshold:
+        print(f"[INFO] 126D win rate {win_126}% < {threshold}%, no alert sent.")
+        return
 
-    subject = (
-        "[Sentiment Radar] Win Rate "
-        + str(target["final_win_rate"])
-        + "% Alert! (CNN:"
-        + str(cnn["score"])
-        + " / VIX:"
-        + str(vix["vix"])
-        + " / "
-        + str(lights["green_count"])
-        + " Green)"
-    )
-
+    subject = f"🚨 美股恐慌逆向雷達警報：6個月實證勝率達 {win_126}%（{payload['lights']['green_count']}/3 綠燈）"
     body = (
-        "US Market Sentiment & Win-Rate Radar\n"
-        "Updated: " + str(payload["updated_at"]) + "\n"
-        "Target Horizon: " + str(target["days"]) + " trading days\n"
-        "Win Rate: " + str(target["final_win_rate"]) + "% (Threshold: " + str(WIN_RATE_ALERT_THRESHOLD) + "%)\n\n"
-        "CNN Fear & Greed: " + str(cnn["score"]) + " (" + str(cnn["rating"]).upper() + ")\n"
-        "CBOE VIX: " + str(vix["vix"]) + " (Prev: " + str(vix["vix_prev"]) + ")\n"
-        "AAII (" + str(aaii["date"]) + "): Bearish " + str(aaii["bearish"]) + "% / Bullish " + str(aaii["bullish"]) + "%\n"
-        "Green Lights: " + str(lights["green_count"]) + " / 3\n"
+        f"資料更新時間：{payload['updated_at']}\n"
+        f"1. CNN Fear & Greed：{payload['cnn']['score']} ({payload['cnn']['rating']})\n"
+        f"2. CBOE VIX：{payload['vix']['vix']}\n"
+        f"3. AAII 散戶看空比例：{payload['aaii']['bearish']}%（{payload['aaii']['date']}）\n"
+        f"4. 6個月（126交易日）歷史綜合勝率：{win_126}%\n"
+        f"5. S&P 500 距離歷史前高回檔：{payload['sp500']['drawdown_pct']}%\n"
     )
 
     msg = MIMEMultipart()
-    msg["From"] = GMAIL_USER
-    msg["To"] = RECEIVER_EMAIL
+    msg["From"] = gmail_user
+    msg["To"] = recipient
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain", "utf-8"))
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        server.send_message(msg)
-    print("Alert email sent to", RECEIVER_EMAIL)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
+            server.login(gmail_user, gmail_pass)
+            server.sendmail(gmail_user, [recipient], msg.as_string())
+        print(f"[INFO] Alert email sent to {recipient}")
+    except Exception as e:
+        print(f"[WARN] Failed to send alert email: {e}")
 
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    old_payload = {}
-    if os.path.exists(JSON_PATH):
-        try:
-            with open(JSON_PATH, "r", encoding="utf-8") as f:
-                old_payload = json.load(f)
-        except Exception:
-            old_payload = {}
+    local_vix = load_local_vix()
+    local_cnn = load_local_cnn()
+    local_aaii = load_local_aaii()
 
-    cnn_info, df_cnn = fetch_cnn_data()
-    vix_info, df_mkt = fetch_vix_and_benchmarks()
-    aaii_info, df_aaii_hist = fetch_aaii_data()
+    cnn_res = fetch_cnn_fear_greed(local_cnn)
+    aaii_latest, aaii_series = fetch_aaii_sentiment(local_aaii)
 
-    if not aaii_info:
-        if "aaii" in old_payload and isinstance(old_payload["aaii"], dict):
-            print("[Anti-wipe] Keeping previous AAII data.")
-            aaii_info = old_payload["aaii"]
-        else:
-            aaii_info = {
-                "date": "Baseline",
-                "bullish": 37.1,
-                "neutral": 17.5,
-                "bearish": 45.4,
-                "spread": -8.3,
-            }
+    vix_yf = download_close_series("^VIX", start_date="1990-01-01")
+    vix_series = pd.concat([local_vix, vix_yf])
+    vix_series = vix_series[~vix_series.index.duplicated(keep="last")].sort_index()
 
-    lights = evaluate_lights(cnn_info["score"], vix_info["vix"], aaii_info["bearish"])
-    win_rates, full_hist = compute_multi_horizon_winrates(
-        cnn_info["score"], vix_info["vix"], aaii_info, df_cnn, df_mkt, df_aaii_hist
-    )
+    sp_series = download_close_series("^GSPC", start_date="1990-01-01")
+    ndx_series = download_close_series("^NDX", start_date="1990-01-01")
 
-    utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    master_idx = sp_series.index.union(vix_series.index).sort_values()
+    df = pd.DataFrame(index=master_idx)
+    df.index.name = "Date"
+    df["SP500"] = sp_series.reindex(master_idx).ffill()
+    df["NDX"] = ndx_series.reindex(master_idx).ffill()
+    df["SP500_DD"] = ((df["SP500"] / df["SP500"].cummax()) - 1.0) * 100.0
+    df["VIX"] = vix_series.reindex(master_idx)
+    df["CNN_FG"] = cnn_res["series"].reindex(master_idx)
+
+    if not aaii_series.empty:
+        aaii_union = master_idx.union(aaii_series.index).sort_values()
+        df["AAII_Bearish"] = aaii_series.reindex(aaii_union).ffill(limit=10).reindex(master_idx)
+    else:
+        df["AAII_Bearish"] = np.nan
+
+    df_export = df.reset_index()
+    df_export["Date"] = df_export["Date"].dt.strftime("%Y-%m-%d")
+    for col in ["SP500", "NDX", "SP500_DD", "VIX", "CNN_FG", "AAII_Bearish"]:
+        df_export[col] = pd.to_numeric(df_export[col], errors="coerce").round(2)
+    df_export.to_csv(CSV_PATH, index=False)
+
+    vix_valid = vix_series.dropna()
+    vix_now = round(float(vix_valid.iloc[-1]), 2) if not vix_valid.empty else 20.0
+    vix_prev = round(float(vix_valid.iloc[-2]), 2) if len(vix_valid) >= 2 else vix_now
+
+    cnn_now = cnn_res["score"]
+    aaii_bear_now = aaii_latest["bearish"]
+
+    cnn_level = "green" if cnn_now <= 25 else ("yellow" if cnn_now <= 45 else "red")
+    vix_level = "green" if vix_now >= 30 else ("yellow" if vix_now >= 20 else "red")
+    aaii_level = "green" if aaii_bear_now >= 50 else ("yellow" if aaii_bear_now >= 40 else "red")
+    green_count = sum(1 for lvl in [cnn_level, vix_level, aaii_level] if lvl == "green")
+
+    win_rates = compute_empirical_win_rates(df, cnn_now, vix_now, aaii_bear_now)
+
+    sp_valid = df["SP500"].dropna()
+    dd_valid = df["SP500_DD"].dropna()
+    sp_now = round(float(sp_valid.iloc[-1]), 2) if not sp_valid.empty else 0.0
+    dd_now = round(float(dd_valid.iloc[-1]), 2) if not dd_valid.empty else 0.0
+
+    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+    updated_str = datetime.datetime.now(tz_tw).strftime("%Y-%m-%d %H:%M UTC+8")
 
     payload = {
-        "updated_at": utc_now,
-        "alert_horizon": DEFAULT_ALERT_HORIZON,
-        "alert_threshold": WIN_RATE_ALERT_THRESHOLD,
-        "cnn": cnn_info,
-        "vix": vix_info,
-        "aaii": aaii_info,
-        "lights": lights,
+        "updated_at": updated_str,
+        "alert_threshold": 90.0,
+        "sp500": {
+            "close": sp_now,
+            "drawdown_pct": dd_now,
+        },
+        "cnn": {
+            "score": cnn_now,
+            "rating": cnn_res["rating"],
+            "prev_close": cnn_res["prev_close"],
+        },
+        "vix": {
+            "vix": vix_now,
+            "vix_prev": vix_prev,
+        },
+        "aaii": aaii_latest,
+        "lights": {
+            "cnn_level": cnn_level,
+            "vix_level": vix_level,
+            "aaii_level": aaii_level,
+            "green_count": green_count,
+        },
         "win_rates": win_rates,
     }
 
     with open(JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    full_hist.to_csv(CSV_PATH, index=False, encoding="utf-8-sig")
 
-    target_win = win_rates[DEFAULT_ALERT_HORIZON]["final_win_rate"]
-    print("Success! Win Rate:", target_win, "% Threshold:", WIN_RATE_ALERT_THRESHOLD)
-
-    if target_win >= WIN_RATE_ALERT_THRESHOLD:
-        send_alert_email(payload)
+    send_alert_email(payload)
+    print("[SUCCESS] Sentiment data & backtest CSV updated successfully.")
 
 
 if __name__ == "__main__":
