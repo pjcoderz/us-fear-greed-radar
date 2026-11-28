@@ -24,6 +24,20 @@ JSON_PATH = os.path.join(DATA_DIR, "sentiment_data.json")
 CSV_PATH = os.path.join(DATA_DIR, "history_backtest.csv")
 AAII_HISTORY_CSV_PATH = os.path.join(DATA_DIR, "aaii_history.csv")
 
+# 本地歷史檔候選路徑（支援放在專案根目錄或 data/ 下）
+VIX_LOCAL_CANDIDATES = [
+    os.path.join(DATA_DIR, "VIX_History.csv"),
+    "VIX_History.csv",
+]
+FG_LOCAL_CANDIDATES = [
+    os.path.join(DATA_DIR, "fear-greed.csv"),
+    "fear-greed.csv",
+]
+AAII_LOCAL_CANDIDATES = [
+    AAII_HISTORY_CSV_PATH,
+    "aaii_history.csv",
+]
+
 GMAIL_USER = os.getenv("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", GMAIL_USER)
@@ -72,6 +86,34 @@ def _parse_float(val, min_val=None, max_val=None):
         return None
 
 
+def _find_existing_file(candidates):
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+def _parse_fg_df(df):
+    if df is None or df.empty:
+        return pd.Series(dtype=float)
+    cols_map = {str(c).strip().lower(): c for c in df.columns}
+    date_col = cols_map.get("date", df.columns[0])
+    val_col = cols_map.get("fear greed", cols_map.get("cnn_fg", df.columns[1] if len(df.columns) > 1 else None))
+    if val_col is None:
+        return pd.Series(dtype=float)
+
+    out = pd.DataFrame({
+        "Date": pd.to_datetime(df[date_col], errors="coerce").dt.tz_localize(None).dt.normalize(),
+        "CNN_FG": pd.to_numeric(df[val_col], errors="coerce"),
+    }).dropna(subset=["Date", "CNN_FG"])
+
+    out = out[(out["CNN_FG"] >= 0.0) & (out["CNN_FG"] <= 100.0)]
+    if out.empty:
+        return pd.Series(dtype=float)
+    out = out.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+    return out.set_index("Date")["CNN_FG"]
+
+
 def fetch_cnn_data():
     url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
     resp = safe_request(url)
@@ -79,7 +121,7 @@ def fetch_cnn_data():
     score = None
     rating = "fear"
     prev_close = None
-    df_recent = pd.DataFrame(columns=["Date", "CNN_FG"])
+    s_recent = pd.Series(dtype=float)
 
     if resp:
         try:
@@ -99,39 +141,41 @@ def fetch_cnn_data():
                         .dt.normalize()
                     )
                     tmp["CNN_FG"] = pd.to_numeric(tmp["y"], errors="coerce")
-                    df_recent = tmp[["Date", "CNN_FG"]].dropna()
+                    tmp = tmp.dropna(subset=["Date", "CNN_FG"]).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+                    if not tmp.empty:
+                        s_recent = tmp.set_index("Date")["CNN_FG"]
         except Exception as e:
             print("[Warn] CNN parse:", str(e))
 
+    s_local = pd.Series(dtype=float)
+    local_fg_path = _find_existing_file(FG_LOCAL_CANDIDATES)
+    if local_fg_path:
+        try:
+            s_local = _parse_fg_df(pd.read_csv(local_fg_path))
+            print("[Info] Loaded local CNN history rows:", len(s_local), "from", local_fg_path)
+        except Exception as e:
+            print("[Warn] Local CNN CSV:", str(e))
+
+    s_arch = pd.Series(dtype=float)
     archive_url = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv"
     resp_arch = safe_request(archive_url)
-    df_arch = pd.DataFrame(columns=["Date", "CNN_FG"])
     if resp_arch:
         try:
-            arch = pd.read_csv(StringIO(resp_arch.text))
-            date_col = "Date" if "Date" in arch.columns else arch.columns[0]
-            val_col = "Fear Greed" if "Fear Greed" in arch.columns else arch.columns[1]
-            arch["Date"] = (
-                pd.to_datetime(arch[date_col], errors="coerce")
-                .dt.tz_localize(None)
-                .dt.normalize()
-            )
-            arch["CNN_FG"] = pd.to_numeric(arch[val_col], errors="coerce")
-            df_arch = arch[["Date", "CNN_FG"]].dropna()
+            s_arch = _parse_fg_df(pd.read_csv(StringIO(resp_arch.text)))
         except Exception as e:
             print("[Warn] CNN archive parse:", str(e))
 
-    df_cnn = pd.concat([df_arch, df_recent], ignore_index=True).dropna()
-    if not df_cnn.empty:
-        df_cnn = (
-            df_cnn.drop_duplicates(subset=["Date"], keep="last")
-            .sort_values("Date")
-            .set_index("Date")
-        )
+    # 合併順序：本地歷史檔 -> GitHub 存檔 -> 線上即時歷史（最新值覆蓋舊值）
+    combined = pd.concat([s_local, s_arch, s_recent])
+    combined = combined[~combined.index.isna()].sort_index()
+    combined = combined[~combined.index.duplicated(keep="last")]
+
+    if not combined.empty:
         if score is None:
-            score = round(float(df_cnn["CNN_FG"].iloc[-1]), 2)
-        if prev_close is None and len(df_cnn) >= 2:
-            prev_close = round(float(df_cnn["CNN_FG"].iloc[-2]), 2)
+            score = round(float(combined.iloc[-1]), 2)
+        if prev_close is None and len(combined) >= 2:
+            prev_close = round(float(combined.iloc[-2]), 2)
+        df_cnn = combined.to_frame(name="CNN_FG")
     else:
         df_cnn = pd.DataFrame(columns=["CNN_FG"])
 
@@ -143,7 +187,30 @@ def fetch_cnn_data():
     return {"score": score, "rating": rating, "prev_close": prev_close}, df_cnn
 
 
-def _fetch_stooq_series(symbol):
+def _load_local_vix_series():
+    vix_path = _find_existing_file(VIX_LOCAL_CANDIDATES)
+    if not vix_path:
+        return pd.Series(dtype=float)
+    try:
+        df = pd.read_csv(vix_path)
+        cols_map = {str(c).strip().lower(): c for c in df.columns}
+        date_col = cols_map.get("date", df.columns[0])
+        close_col = cols_map.get("close", cols_map.get("vix", df.columns[4] if len(df.columns) > 4 else None))
+        if close_col is None:
+            return pd.Series(dtype=float)
+        out = pd.DataFrame({
+            "Date": pd.to_datetime(df[date_col], errors="coerce").dt.tz_localize(None).dt.normalize(),
+            "VIX": pd.to_numeric(df[close_col], errors="coerce"),
+        }).dropna(subset=["Date", "VIX"])
+        out = out.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        print("[Info] Loaded local VIX rows:", len(out), "from", vix_path)
+        return out.set_index("Date")["VIX"]
+    except Exception as e:
+        print("[Warn] Local VIX CSV:", str(e))
+        return pd.Series(dtype=float)
+
+
+def _fetch_stooq_series(symbol, start_date="1990-01-01"):
     url = "https://stooq.com/q/d/l/?s=" + symbol + "&i=d"
     resp = safe_request(url)
     if not resp:
@@ -152,14 +219,14 @@ def _fetch_stooq_series(symbol):
         df = pd.read_csv(StringIO(resp.text))
         if "Date" not in df.columns or "Close" not in df.columns:
             return pd.Series(dtype=float)
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.normalize()
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.tz_localize(None).dt.normalize()
         df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
         df = (
             df.dropna(subset=["Date", "Close"])
             .drop_duplicates(subset=["Date"], keep="last")
             .sort_values("Date")
         )
-        df = df[df["Date"] >= "2011-01-01"]
+        df = df[df["Date"] >= start_date]
         return df.set_index("Date")["Close"]
     except Exception as e:
         print("[Warn] Stooq series:", symbol, str(e))
@@ -201,54 +268,79 @@ def _extract_ticker_close(raw_df, ticker):
 
 
 def fetch_vix_and_benchmarks():
-    vix_s = pd.Series(dtype=float)
+    start_date = "1990-01-01"
+    vix_local = _load_local_vix_series()
+    vix_live = pd.Series(dtype=float)
     sp_s = pd.Series(dtype=float)
     ndx_s = pd.Series(dtype=float)
 
     try:
         raw = yf.download(
             ["^VIX", "^GSPC", "^NDX"],
-            start="2011-01-01",
+            start=start_date,
             progress=False,
             auto_adjust=True,
         )
-        vix_s = _extract_ticker_close(raw, "^VIX")
+        vix_live = _extract_ticker_close(raw, "^VIX")
         sp_s = _extract_ticker_close(raw, "^GSPC")
         ndx_s = _extract_ticker_close(raw, "^NDX")
     except Exception as e:
         print("[Warn] yfinance:", str(e))
 
-    if vix_s.empty:
-        vix_s = _fetch_stooq_series("^vix")
+    if vix_live.empty:
+        vix_live = _fetch_stooq_series("^vix", start_date=start_date)
     if sp_s.empty:
-        sp_s = _fetch_stooq_series("^spx")
+        sp_s = _fetch_stooq_series("^spx", start_date=start_date)
     if ndx_s.empty:
-        ndx_s = _fetch_stooq_series("^ndx")
+        ndx_s = _fetch_stooq_series("^ndx", start_date=start_date)
 
-    df_mkt = pd.DataFrame({"VIX": vix_s, "SP500": sp_s, "NDX": ndx_s}).dropna(subset=["VIX", "SP500"])
-    if df_mkt.empty and os.path.exists(CSV_PATH):
+    # 合併本地 VIX_History.csv 與最新線上 VIX
+    vix_merged = pd.concat([vix_local, vix_live])
+    vix_merged = vix_merged[~vix_merged.index.isna()].sort_index()
+    vix_merged = vix_merged[~vix_merged.index.duplicated(keep="last")]
+
+    # 若既有 history_backtest.csv 有歷史 SP500/NDX，作為早期基準備援
+    old_sp = pd.Series(dtype=float)
+    old_ndx = pd.Series(dtype=float)
+    if os.path.exists(CSV_PATH):
         try:
             old_csv = pd.read_csv(CSV_PATH)
-            old_csv["dt"] = pd.to_datetime(old_csv["Date"], errors="coerce")
-            old_csv = old_csv.dropna(subset=["dt"]).set_index("dt").sort_index()
-            if {"VIX", "SP500"}.issubset(old_csv.columns):
-                df_mkt = old_csv[["VIX", "SP500"]].copy()
-                df_mkt["NDX"] = old_csv["NDX"] if "NDX" in old_csv.columns else old_csv["SP500"]
+            old_csv["dt"] = pd.to_datetime(old_csv["Date"], errors="coerce").dt.tz_localize(None).dt.normalize()
+            old_csv = old_csv.dropna(subset=["dt"]).drop_duplicates(subset=["dt"], keep="last").set_index("dt").sort_index()
+            if "SP500" in old_csv.columns:
+                old_sp = pd.to_numeric(old_csv["SP500"], errors="coerce").dropna()
+            if "NDX" in old_csv.columns:
+                old_ndx = pd.to_numeric(old_csv["NDX"], errors="coerce").dropna()
         except Exception as e:
             print("[Warn] CSV fallback:", str(e))
 
-    if df_mkt.empty:
-        raise RuntimeError("Market data empty from all sources.")
+    sp_all = pd.concat([old_sp, sp_s])
+    sp_all = sp_all[~sp_all.index.isna()].sort_index()
+    sp_all = sp_all[~sp_all.index.duplicated(keep="last")]
 
-    if "NDX" not in df_mkt.columns or df_mkt["NDX"].isna().all():
-        df_mkt["NDX"] = df_mkt["SP500"]
+    ndx_all = pd.concat([old_ndx, ndx_s])
+    ndx_all = ndx_all[~ndx_all.index.isna()].sort_index()
+    ndx_all = ndx_all[~ndx_all.index.duplicated(keep="last")]
+
+    if vix_merged.empty:
+        raise RuntimeError("VIX data empty from all sources.")
+
+    df_mkt = pd.DataFrame({"VIX": vix_merged}, index=vix_merged.index)
+    if not sp_all.empty:
+        df_mkt["SP500"] = sp_all.reindex(df_mkt.index)
     else:
-        df_mkt["NDX"] = df_mkt["NDX"].ffill().bfill()
+        df_mkt["SP500"] = np.nan
+
+    if not ndx_all.empty:
+        df_mkt["NDX"] = ndx_all.reindex(df_mkt.index)
+    else:
+        df_mkt["NDX"] = df_mkt["SP500"]
 
     df_mkt = df_mkt.sort_index()
     vix_now = round(float(df_mkt["VIX"].iloc[-1]), 2)
     vix_prev = round(float(df_mkt["VIX"].iloc[-2]), 2) if len(df_mkt) >= 2 else vix_now
-    sp500_now = round(float(df_mkt["SP500"].iloc[-1]), 2)
+    sp_valid = df_mkt["SP500"].dropna()
+    sp500_now = round(float(sp_valid.iloc[-1]), 2) if not sp_valid.empty else 0.0
 
     return {"vix": vix_now, "vix_prev": vix_prev, "sp500": sp500_now}, df_mkt
 
@@ -342,13 +434,14 @@ def fetch_aaii_data():
             print("[Warn] AAII HTML:", str(e))
 
     frames = []
-    if os.path.exists(AAII_HISTORY_CSV_PATH):
+    local_aaii_path = _find_existing_file(AAII_LOCAL_CANDIDATES)
+    if local_aaii_path:
         try:
-            local_df = pd.read_csv(AAII_HISTORY_CSV_PATH)
+            local_df = pd.read_csv(local_aaii_path)
             norm_local = _normalize_aaii_df(local_df)
             if not norm_local.empty:
                 frames.append(norm_local)
-                print("[Info] Loaded local AAII history rows:", len(norm_local))
+                print("[Info] Loaded local AAII history rows:", len(norm_local), "from", local_aaii_path)
         except Exception as e:
             print("[Warn] Local AAII history CSV:", str(e))
 
@@ -427,7 +520,6 @@ def fetch_aaii_data():
             "Neutral": "last",
             "Bearish": "last",
         })
-        # 將最新一週 AAII 寫回 data/aaii_history.csv，方便每週自動累積
         save_df = merged_all.copy()
         save_df["Date"] = save_df["Date"].dt.strftime("%Y-%m-%d")
         save_df.to_csv(AAII_HISTORY_CSV_PATH, index=False, encoding="utf-8-sig")
@@ -452,19 +544,21 @@ def evaluate_lights(cnn_score, vix_val, aaii_bearish):
 
 
 def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, df_aaii_hist):
-    if df_cnn is not None and not df_cnn.empty:
-        df = df_mkt.join(df_cnn, how="left")
-        df["CNN_FG"] = df["CNN_FG"].ffill().bfill().fillna(cnn_now)
-    else:
-        df = df_mkt.copy()
-        df["CNN_FG"] = cnn_now
+    df = df_mkt.copy().sort_index()
 
+    # CNN：只對齊真實存在的日期，不回填尚未有資料的早期區間
+    if df_cnn is not None and not df_cnn.empty:
+        df = df.join(df_cnn[["CNN_FG"]], how="left")
+    else:
+        df["CNN_FG"] = np.nan
+
+    # AAII：僅做前向填補（最多 10 天），不做 bfill 與早期回填
     if df_aaii_hist is not None and not df_aaii_hist.empty:
         combined_idx = df.index.union(df_aaii_hist.index).sort_values()
-        s_aaii = df_aaii_hist["AAII_Bearish"].reindex(combined_idx).ffill().bfill()
-        df["AAII_Bearish"] = s_aaii.reindex(df.index).fillna(aaii_now["bearish"])
+        s_aaii = df_aaii_hist["AAII_Bearish"].reindex(combined_idx).ffill(limit=10)
+        df["AAII_Bearish"] = s_aaii.reindex(df.index)
     else:
-        df["AAII_Bearish"] = aaii_now["bearish"]
+        df["AAII_Bearish"] = np.nan
 
     horizon_days = {"21D": 21, "63D": 63, "126D": 126, "252D": 252}
 
@@ -481,9 +575,9 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
         temp = df.copy()
         temp["SP_Fwd"] = temp["SP500"].shift(-days) / temp["SP500"] - 1.0
         temp["NDX_Fwd"] = temp["NDX"].shift(-days) / temp["NDX"] - 1.0
-        valid = temp.dropna(subset=["SP_Fwd"])
+        valid_sp = temp.dropna(subset=["SP_Fwd"])
 
-        if valid.empty:
+        if valid_sp.empty:
             results[code] = {
                 "days": days,
                 "final_win_rate": 50.0,
@@ -496,10 +590,13 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
             }
             continue
 
-        cond_cnn = valid[valid["CNN_FG"] <= max(cnn_now, 5)]
-        cond_vix = valid[valid["VIX"] >= min(vix_now, 45)]
-        cond_combo = valid[
-            (valid["CNN_FG"] <= max(cnn_now, 10)) & (valid["VIX"] >= min(vix_now, 35))
+        valid_cnn = valid_sp.dropna(subset=["CNN_FG"])
+        valid_vix = valid_sp.dropna(subset=["VIX"])
+
+        cond_cnn = valid_cnn[valid_cnn["CNN_FG"] <= max(cnn_now, 5)]
+        cond_vix = valid_vix[valid_vix["VIX"] >= min(vix_now, 45)]
+        cond_combo = valid_cnn[
+            (valid_cnn["CNN_FG"] <= max(cnn_now, 10)) & (valid_cnn["VIX"] >= min(vix_now, 35))
         ]
 
         win_cnn = round(float((cond_cnn["SP_Fwd"] > 0).mean() * 100), 2) if len(cond_cnn) else 50.0
@@ -508,7 +605,7 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
         if len(cond_combo) >= 10:
             base_win = float((cond_combo["SP_Fwd"] > 0).mean() * 100)
             sp_avg_ret = float(cond_combo["SP_Fwd"].mean() * 100)
-            ndx_avg_ret = float(cond_combo["NDX_Fwd"].mean() * 100)
+            ndx_avg_ret = float(cond_combo["NDX_Fwd"].dropna().mean() * 100) if not cond_combo["NDX_Fwd"].dropna().empty else 0.0
             samples = int(len(cond_combo))
         else:
             sp_rets = [
@@ -522,8 +619,8 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
             ndx_rets = [
                 x
                 for x in [
-                    cond_cnn["NDX_Fwd"].mean() if len(cond_cnn) else np.nan,
-                    cond_vix["NDX_Fwd"].mean() if len(cond_vix) else np.nan,
+                    cond_cnn["NDX_Fwd"].dropna().mean() if (len(cond_cnn) and not cond_cnn["NDX_Fwd"].dropna().empty) else np.nan,
+                    cond_vix["NDX_Fwd"].dropna().mean() if (len(cond_vix) and not cond_vix["NDX_Fwd"].dropna().empty) else np.nan,
                 ]
                 if not np.isnan(x)
             ]
@@ -544,10 +641,11 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
             "sample_size": samples,
         }
 
-    recent_hist = df.tail(365).reset_index()
-    date_col = recent_hist.columns[0]
-    recent_hist["Date"] = pd.to_datetime(recent_hist[date_col]).dt.strftime("%Y-%m-%d")
-    return results, recent_hist[["Date", "CNN_FG", "VIX", "AAII_Bearish", "SP500", "NDX"]]
+    # 輸出完整歷史序列（保留 NaN 讓圖表在無資料區間自然留白）
+    full_hist = df.reset_index()
+    date_col = full_hist.columns[0]
+    full_hist["Date"] = pd.to_datetime(full_hist[date_col]).dt.strftime("%Y-%m-%d")
+    return results, full_hist[["Date", "CNN_FG", "VIX", "AAII_Bearish", "SP500", "NDX"]]
 
 
 def send_alert_email(payload):
@@ -625,7 +723,7 @@ def main():
             }
 
     lights = evaluate_lights(cnn_info["score"], vix_info["vix"], aaii_info["bearish"])
-    win_rates, recent_hist = compute_multi_horizon_winrates(
+    win_rates, full_hist = compute_multi_horizon_winrates(
         cnn_info["score"], vix_info["vix"], aaii_info, df_cnn, df_mkt, df_aaii_hist
     )
 
@@ -644,7 +742,7 @@ def main():
 
     with open(JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    recent_hist.to_csv(CSV_PATH, index=False, encoding="utf-8-sig")
+    full_hist.to_csv(CSV_PATH, index=False, encoding="utf-8-sig")
 
     target_win = win_rates[DEFAULT_ALERT_HORIZON]["final_win_rate"]
     print("Success! Win Rate:", target_win, "% Threshold:", WIN_RATE_ALERT_THRESHOLD)
