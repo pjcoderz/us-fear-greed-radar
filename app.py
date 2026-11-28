@@ -69,10 +69,13 @@ I18N = {
         "section_cards": "🚦 三大市場情緒指標即時燈號",
         "card1_title": "1. CNN 恐慌與貪婪指數",
         "card1_sub": "原始評級：{rating}（前日 {prev}）<br>單指標歷史勝率：<b>{win}%</b>",
+        "card1_ext": "極端值：最低 {min_v:.1f} / 最高 {max_v:.1f}（目前恐慌百分位 {pct:.0f}%）",
         "card2_title": "2. CBOE VIX 波動率恐慌指數",
         "card2_sub": "前日收盤：{prev}（門檻 ≥ 30 亮綠燈）<br>單指標歷史勝率：<b>{win}%</b>",
+        "card2_ext": "極端值：最低 {min_v:.2f} / 最高 {max_v:.2f}（目前恐慌百分位 {pct:.0f}%）",
         "card3_title": "3. AAII 散戶看空比例 ({date})",
         "card3_sub": "看多 {bull}% / 中立 {neut}%（多空差 {spread}%）<br>散戶極端看空加權：<b>+{bonus}%</b>",
+        "card3_ext": "極端值：最低 {min_v:.1f}% / 最高 {max_v:.1f}%（目前看空百分位 {pct:.0f}%）",
         "bearish_unit": "看空",
         "lights": {
             "cnn": {"green": "🟢 極度恐慌 (買點亮燈)", "yellow": "🟡 恐慌觀察", "red": "🔴 中性/貪婪"},
@@ -83,11 +86,14 @@ I18N = {
         "tbl_cols": ["持有週期", "綜合勝率", "達 90% 警報", "CNN 勝率", "VIX 勝率", "AAII 加權", "S&P 500 平均報酬", "NASDAQ-100 平均報酬", "歷史樣本數"],
         "yes": "✅ 是",
         "days_unit": " 天",
-        "chart_header": "📈 歷史恐慌趨勢與門檻雷達圖（點擊切換日線 / 三指標週線）",
+        "chart_header": "📈 歷史恐慌趨勢與門檻雷達圖",
         "chart_modes": ["日線：CNN 恐慌度 & VIX（每日）", "週線：CNN 恐慌度 & VIX & AAII 看空（每週三指標同框）"],
+        "range_opts": ["3M", "6M", "1Y", "ALL"],
+        "range_labels": {"3M": "近 3 個月", "6M": "近 6 個月", "1Y": "近 1 年", "ALL": "全部歷史"},
         "chart_caption": (
-            "同向門檻解讀：三條線皆已轉為「越高＝越恐慌」，紅色虛線（100%）代表各指標逆向買點綠燈門檻"
-            "（CNN_Fear ≥ 75 即原 CNN ≤ 25；VIX ≥ 30；AAII_Bearish ≥ 50%）。滑鼠移過或點選可查看原始數值。"
+            "同向門檻解讀：三條線皆為「越高＝越恐慌」，紅色虛線（100%）為逆向買點綠燈門檻"
+            "（CNN_Fear ≥ 75 即原 CNN ≤ 25；VIX ≥ 30；AAII_Bearish ≥ 50%）。指標尚未發展或缺漏期間直接留白；"
+            "滑鼠移過或手指點選可查看十字準星對齊與該日期原始數值。"
         ),
         "no_data": "⚠️ 尚未產生資料檔，請先至 GitHub Actions 手動執行一次 Update Fear & Greed Data。",
         "academic_md": (
@@ -134,10 +140,13 @@ I18N = {
         "section_cards": "🚦 Real-Time Sentiment Indicator Signals",
         "card1_title": "1. CNN Fear & Greed Index",
         "card1_sub": "Rating: {rating} (Prev: {prev})<br>Standalone Win Rate: <b>{win}%</b>",
+        "card1_ext": "Range: Min {min_v:.1f} / Max {max_v:.1f} (Fear Pct: {pct:.0f}th)",
         "card2_title": "2. CBOE VIX Volatility Index",
         "card2_sub": "Prev Close: {prev} (Green Light ≥ 30)<br>Standalone Win Rate: <b>{win}%</b>",
+        "card2_ext": "Range: Min {min_v:.2f} / Max {max_v:.2f} (Fear Pct: {pct:.0f}th)",
         "card3_title": "3. AAII Retail Bearishness ({date})",
         "card3_sub": "Bullish {bull}% / Neutral {neut}% (Spread: {spread}%)<br>Extreme Bearish Bonus: <b>+{bonus}%</b>",
+        "card3_ext": "Range: Min {min_v:.1f}% / Max {max_v:.1f}% (Bearish Pct: {pct:.0f}th)",
         "bearish_unit": "Bearish",
         "lights": {
             "cnn": {"green": "🟢 Extreme Fear (Buy Signal)", "yellow": "🟡 Fear Watch", "red": "🔴 Neutral / Greed"},
@@ -148,11 +157,14 @@ I18N = {
         "tbl_cols": ["Holding Horizon", "Composite Win Rate", "≥ 90% Alert", "CNN Win Rate", "VIX Win Rate", "AAII Bonus", "S&P 500 Avg Return", "NASDAQ-100 Avg Return", "Sample Size"],
         "yes": "✅ Yes",
         "days_unit": " days",
-        "chart_header": "📈 Historical Fear Trend & Threshold Radar (Daily / 3-Indicator Weekly)",
+        "chart_header": "📈 Historical Fear Trend & Threshold Radar",
         "chart_modes": ["Daily: CNN Fear & VIX", "Weekly: CNN Fear & VIX & AAII Bearish (3-Series Weekly)"],
+        "range_opts": ["3M", "6M", "1Y", "ALL"],
+        "range_labels": {"3M": "3M", "6M": "6M", "1Y": "1Y", "ALL": "All History"},
         "chart_caption": (
-            "Aligned Threshold Guide: All series are oriented so HIGHER = MORE FEAR, with 100% marking each contrarian green-light threshold"
-            " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Hover or tap to inspect raw values."
+            "Aligned Threshold Guide: HIGHER = MORE FEAR, with 100% marking each contrarian green-light threshold"
+            " (CNN_Fear ≥ 75 = raw CNN ≤ 25; VIX ≥ 30; AAII_Bearish ≥ 50%). Missing or pre-inception periods stay blank; "
+            "hover or tap for crosshair alignment and exact raw values."
         ),
         "no_data": "⚠️ No dataset found yet. Please run Update Fear & Greed Data in GitHub Actions first.",
         "academic_md": (
@@ -199,10 +211,13 @@ I18N = {
         "section_cards": "🚦 三大市場センチメント指標シグナル",
         "card1_title": "1. CNN 恐怖と強欲指数",
         "card1_sub": "評価：{rating}（前日 {prev}）<br>単独指標の歴史的勝率：<b>{win}%</b>",
+        "card1_ext": "極値：最小 {min_v:.1f} / 最大 {max_v:.1f}（現在恐怖パーセンタイル {pct:.0f}%）",
         "card2_title": "2. CBOE VIX 恐怖指数",
         "card2_sub": "前日終値：{prev}（閾値 ≥ 30 で緑点灯）<br>単独指標の歴史的勝率：<b>{win}%</b>",
+        "card2_ext": "極値：最小 {min_v:.2f} / 最大 {max_v:.2f}（現在恐怖パーセンタイル {pct:.0f}%）",
         "card3_title": "3. AAII 個人投資家弱気比率 ({date})",
         "card3_sub": "強気 {bull}% / 中立 {neut}%（強弱スプレッド {spread}%）<br>極端な弱気補正：<b>+{bonus}%</b>",
+        "card3_ext": "極値：最小 {min_v:.1f}% / 最大 {max_v:.1f}（現在弱気パーセンタイル {pct:.0f}%）",
         "bearish_unit": "弱気",
         "lights": {
             "cnn": {"green": "🟢 極度の恐怖 (買い点灯)", "yellow": "🟡 恐怖警戒", "red": "🔴 中立・強欲"},
@@ -213,11 +228,14 @@ I18N = {
         "tbl_cols": ["保有期間", "総合勝率", "90%警報", "CNN勝率", "VIX勝率", "AAII補正", "S&P 500 平均リターン", "NASDAQ-100 平均リターン", "サンプル数"],
         "yes": "✅ 達成",
         "days_unit": " 日",
-        "chart_header": "📈 過去の恐怖トレンド・閾値レーダー（日足 / 3指標週足 切替）",
+        "chart_header": "📈 過去の恐怖トレンド・閾値レーダー",
         "chart_modes": ["日足：CNN恐怖度 & VIX", "週足：CNN恐怖度 & VIX & AAII弱気（週次3指標同框）"],
+        "range_opts": ["3M", "6M", "1Y", "ALL"],
+        "range_labels": {"3M": "3ヶ月", "6M": "6ヶ月", "1Y": "1年", "ALL": "全期間"},
         "chart_caption": (
             "同向閾値の見方：全指標を「高いほど恐怖」に統一し、100%ラインを逆張り買い点灯基準としました"
-            "（CNN_Fear ≥ 75＝元CNN ≤ 25、VIX ≥ 30、AAII_Bearish ≥ 50%）。ホバーまたはタップで元数値を確認できます。"
+            "（CNN_Fear ≥ 75＝元CNN ≤ 25、VIX ≥ 30、AAII_Bearish ≥ 50%）。未整備・欠損期間は空白表示となり、"
+            "ホバーまたはタップで十字線と元数値を確認できます。"
         ),
         "no_data": "⚠️ データファイルが未生成です。先に GitHub Actions から Update Fear & Greed Data を実行してください。",
         "academic_md": (
@@ -255,7 +273,44 @@ def update_visitor_counter():
     return st.session_state.get("visitor_count", 1001)
 
 
+def compute_extremes_summary(df_hist, cnn_val, vix_val, aaii_val):
+    summary = {
+        "cnn": {"min_v": float(cnn_val), "max_v": float(cnn_val), "pct": 50.0},
+        "vix": {"min_v": float(vix_val), "max_v": float(vix_val), "pct": 50.0},
+        "aaii": {"min_v": float(aaii_val), "max_v": float(aaii_val), "pct": 50.0},
+    }
+    if df_hist is None or df_hist.empty:
+        return summary
+
+    if "CNN_FG" in df_hist.columns:
+        s_cnn = pd.to_numeric(df_hist["CNN_FG"], errors="coerce").dropna()
+        if not s_cnn.empty:
+            summary["cnn"]["min_v"] = float(s_cnn.min())
+            summary["cnn"]["max_v"] = float(s_cnn.max())
+            # 越低越恐慌：目前數值低於或等於歷史多少比例
+            summary["cnn"]["pct"] = float((s_cnn <= float(cnn_val)).mean() * 100.0)
+
+    if "VIX" in df_hist.columns:
+        s_vix = pd.to_numeric(df_hist["VIX"], errors="coerce").dropna()
+        if not s_vix.empty:
+            summary["vix"]["min_v"] = float(s_vix.min())
+            summary["vix"]["max_v"] = float(s_vix.max())
+            summary["vix"]["pct"] = float((s_vix <= float(vix_val)).mean() * 100.0)
+
+    if "AAII_Bearish" in df_hist.columns:
+        s_aaii = pd.to_numeric(df_hist["AAII_Bearish"], errors="coerce").dropna()
+        if not s_aaii.empty:
+            summary["aaii"]["min_v"] = float(s_aaii.min())
+            summary["aaii"]["max_v"] = float(s_aaii.max())
+            summary["aaii"]["pct"] = float((s_aaii <= float(aaii_val)).mean() * 100.0)
+
+    return summary
+
+
 def build_aligned_fear_chart(df_source, include_aaii=False):
+    if df_source is None or df_source.empty:
+        return None
+
     records = []
     for idx, row in df_source.iterrows():
         dt_str = idx.strftime("%Y-%m-%d")
@@ -292,6 +347,13 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
     domain_list = ["CNN_Fear (100 - CNN)", "VIX"] + (["AAII_Bearish"] if include_aaii else [])
     range_list = ["#2563EB", "#D97706"] + (["#059669"] if include_aaii else [])
 
+    nearest = alt.selection_point(
+        nearest=True,
+        on="pointerover",
+        fields=["Date"],
+        empty=False,
+    )
+
     lines = (
         alt.Chart(df_long)
         .mark_line(strokeWidth=2.2)
@@ -307,12 +369,43 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
                 scale=alt.Scale(domain=domain_list, range=range_list),
                 legend=alt.Legend(title=None, orient="top"),
             ),
+        )
+    )
+
+    # 透明感應層：吸附最近日期並觸發十字準星與 Tooltip
+    hover_layer = (
+        alt.Chart(df_long)
+        .mark_point(opacity=0, size=60)
+        .encode(
+            x=alt.X("Date:N"),
+            y=alt.Y("ThresholdPct:Q"),
             tooltip=[
                 alt.Tooltip("Date:N", title="Date"),
                 alt.Tooltip("Indicator:N", title="Indicator"),
                 alt.Tooltip("ThresholdPct:Q", title="Threshold %"),
                 alt.Tooltip("RawText:N", title="Raw Value"),
             ],
+        )
+        .add_params(nearest)
+    )
+
+    # 十字準星垂直線
+    crosshair_rule = (
+        alt.Chart(df_long)
+        .mark_rule(color="#64748B", strokeDash=[3, 3], strokeWidth=1.2)
+        .encode(x=alt.X("Date:N"))
+        .transform_filter(nearest)
+    )
+
+    # 吸附點高亮圓圈
+    active_points = (
+        alt.Chart(df_long)
+        .mark_circle(size=75)
+        .encode(
+            x=alt.X("Date:N"),
+            y=alt.Y("ThresholdPct:Q"),
+            color=alt.Color("Indicator:N", scale=alt.Scale(domain=domain_list, range=range_list)),
+            opacity=alt.condition(nearest, alt.value(1), alt.value(0)),
         )
     )
 
@@ -323,7 +416,7 @@ def build_aligned_fear_chart(df_source, include_aaii=False):
         .encode(y="y:Q")
     )
 
-    return (lines + rule).properties(height=340).interactive()
+    return (lines + rule + crosshair_rule + active_points + hover_layer).properties(height=360)
 
 
 with st.sidebar:
@@ -401,6 +494,7 @@ css_block = (
     ".stApp { background-color: " + style["bg"] + "; color: " + style["text"] + "; font-size: " + str(font_size) + "px; }"
     ".radar-card { background-color: " + style["card"] + "; border: 1px solid " + style["border"] + "; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }"
     ".metric-big { font-size: " + str(font_size + 14) + "px; font-weight: 800; margin: 6px 0; }"
+    ".ext-foot { margin-top: 8px; padding-top: 8px; border-top: 1px dashed " + style["border"] + "; font-size: " + str(max(12, font_size - 3)) + "px; opacity: 0.8; }"
     ".badge-green { background-color: #DCFCE7; color: #166534 !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-yellow { background-color: #FEF9C3; color: #854D0E !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
     ".badge-red { background-color: #FEE2E2; color: #991B1B !important; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: " + str(font_size - 2) + "px; }"
@@ -446,6 +540,12 @@ if not os.path.exists(JSON_PATH):
 with open(JSON_PATH, "r", encoding="utf-8") as f:
     data = json.load(f)
 
+df_hist = None
+if os.path.exists(CSV_PATH):
+    df_tmp = pd.read_csv(CSV_PATH)
+    df_tmp["dt"] = pd.to_datetime(df_tmp["Date"], errors="coerce")
+    df_hist = df_tmp.dropna(subset=["dt"]).set_index("dt").sort_index()
+
 st.caption(
     t["meta_line"].format(
         updated=data.get("updated_at", ""),
@@ -462,6 +562,7 @@ with tab_dash:
     aaii = data["aaii"]
     lights = data["lights"]
     win_rates = data["win_rates"]
+    ext_stats = compute_extremes_summary(df_hist, cnn["score"], vix["vix"], aaii["bearish"])
 
     h_keys = ["126D", "252D", "63D", "21D"]
     h_code = st.radio(
@@ -509,7 +610,14 @@ with tab_dash:
             "<span class='badge-" + lvl1 + "'>" + t["lights"]["cnn"][lvl1] + "</span>"
             "<p style='margin-top:10px; opacity:0.85;'>"
             + t["card1_sub"].format(rating=str(cnn["rating"]).title(), prev=cnn["prev_close"], win=current_stat["win_cnn"])
-            + "</p></div>"
+            + "</p>"
+            "<div class='ext-foot'>"
+            + t["card1_ext"].format(
+                min_v=ext_stats["cnn"]["min_v"],
+                max_v=ext_stats["cnn"]["max_v"],
+                pct=ext_stats["cnn"]["pct"],
+            )
+            + "</div></div>"
         )
         st.markdown(c1_html, unsafe_allow_html=True)
 
@@ -522,7 +630,14 @@ with tab_dash:
             "<span class='badge-" + lvl2 + "'>" + t["lights"]["vix"][lvl2] + "</span>"
             "<p style='margin-top:10px; opacity:0.85;'>"
             + t["card2_sub"].format(prev=vix["vix_prev"], win=current_stat["win_vix"])
-            + "</p></div>"
+            + "</p>"
+            "<div class='ext-foot'>"
+            + t["card2_ext"].format(
+                min_v=ext_stats["vix"]["min_v"],
+                max_v=ext_stats["vix"]["max_v"],
+                pct=ext_stats["vix"]["pct"],
+            )
+            + "</div></div>"
         )
         st.markdown(c2_html, unsafe_allow_html=True)
 
@@ -540,7 +655,14 @@ with tab_dash:
                 spread=aaii["spread"],
                 bonus=current_stat["aaii_bonus"],
             )
-            + "</p></div>"
+            + "</p>"
+            "<div class='ext-foot'>"
+            + t["card3_ext"].format(
+                min_v=ext_stats["aaii"]["min_v"],
+                max_v=ext_stats["aaii"]["max_v"],
+                pct=ext_stats["aaii"]["pct"],
+            )
+            + "</div></div>"
         )
         st.markdown(c3_html, unsafe_allow_html=True)
 
@@ -768,29 +890,43 @@ with tab_dash:
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    if os.path.exists(CSV_PATH):
-        df_hist = pd.read_csv(CSV_PATH)
-        df_hist["dt"] = pd.to_datetime(df_hist["Date"], errors="coerce")
-        df_hist = df_hist.dropna(subset=["dt"]).set_index("dt").sort_index()
-
+    if df_hist is not None and not df_hist.empty:
         st.subheader(t["chart_header"])
-        selected_mode = st.radio(
-            "chart_mode_switch",
-            options=[0, 1],
-            format_func=lambda i: t["chart_modes"][i],
-            horizontal=True,
-            label_visibility="collapsed",
-        )
+        ctrl_col1, ctrl_col2 = st.columns([2, 2])
+        with ctrl_col1:
+            selected_mode = st.radio(
+                "chart_mode_switch",
+                options=[0, 1],
+                format_func=lambda i: t["chart_modes"][i],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+        with ctrl_col2:
+            selected_range = st.radio(
+                "chart_range_switch",
+                options=t["range_opts"],
+                format_func=lambda r: t["range_labels"][r],
+                index=3,
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+
+        max_dt = df_hist.index.max()
+        range_days = {"3M": 92, "6M": 183, "1Y": 365}
+        if selected_range in range_days and pd.notna(max_dt):
+            df_filtered = df_hist[df_hist.index >= (max_dt - pd.Timedelta(days=range_days[selected_range]))]
+        else:
+            df_filtered = df_hist
 
         if selected_mode == 0:
-            chart_obj = build_aligned_fear_chart(df_hist, include_aaii=False)
+            chart_obj = build_aligned_fear_chart(df_filtered, include_aaii=False)
             if chart_obj is not None:
                 st.altair_chart(chart_obj, use_container_width=True)
                 st.caption(t["chart_caption"])
         else:
-            weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish"] if c in df_hist.columns]
+            weekly_cols = [c for c in ["CNN_FG", "VIX", "AAII_Bearish"] if c in df_filtered.columns]
             if weekly_cols:
-                df_weekly = df_hist[weekly_cols].resample("W-FRI").last().dropna(how="all")
+                df_weekly = df_filtered[weekly_cols].resample("W-FRI").last().dropna(how="all")
                 chart_obj = build_aligned_fear_chart(df_weekly, include_aaii=True)
                 if chart_obj is not None:
                     st.altair_chart(chart_obj, use_container_width=True)
