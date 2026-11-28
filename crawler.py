@@ -22,6 +22,7 @@ DEFAULT_ALERT_HORIZON = "126D"
 DATA_DIR = "data"
 JSON_PATH = os.path.join(DATA_DIR, "sentiment_data.json")
 CSV_PATH = os.path.join(DATA_DIR, "history_backtest.csv")
+AAII_HISTORY_CSV_PATH = os.path.join(DATA_DIR, "aaii_history.csv")
 
 GMAIL_USER = os.getenv("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
@@ -258,12 +259,54 @@ def _parse_aaii_date(raw_str):
     s = str(raw_str).strip()
     dt = pd.to_datetime(s, errors="coerce")
     if pd.isna(dt):
-        # 處理像 "Nov 26" 或 "Nov 26, 2026" 格式
         cur_year = datetime.now(timezone.utc).year
         dt = pd.to_datetime(s + " " + str(cur_year), errors="coerce")
     if pd.notna(dt):
         return dt.tz_localize(None).normalize()
     return pd.NaT
+
+
+def _normalize_aaii_df(df_raw):
+    if df_raw is None or df_raw.empty:
+        return pd.DataFrame(columns=["Date", "Bullish", "Neutral", "Bearish"])
+
+    cols_map = {str(c).strip().lower(): c for c in df_raw.columns}
+    date_col = cols_map.get("date", df_raw.columns[0])
+    bear_col = cols_map.get("bearish", df_raw.columns[3] if len(df_raw.columns) > 3 else None)
+    bull_col = cols_map.get("bullish")
+    neut_col = cols_map.get("neutral")
+
+    if bear_col is None:
+        return pd.DataFrame(columns=["Date", "Bullish", "Neutral", "Bearish"])
+
+    out = pd.DataFrame()
+    out["Date"] = df_raw[date_col].apply(_parse_aaii_date)
+    out["Bearish"] = df_raw[bear_col].apply(lambda x: _parse_float(x, 0, 100))
+
+    if not out["Bearish"].dropna().empty and out["Bearish"].dropna().max() <= 1.0:
+        out["Bearish"] = (out["Bearish"] * 100.0).round(2)
+
+    if bull_col is not None:
+        out["Bullish"] = df_raw[bull_col].apply(lambda x: _parse_float(x, 0, 100))
+        if not out["Bullish"].dropna().empty and out["Bullish"].dropna().max() <= 1.0:
+            out["Bullish"] = (out["Bullish"] * 100.0).round(2)
+    else:
+        out["Bullish"] = np.nan
+
+    if neut_col is not None:
+        out["Neutral"] = df_raw[neut_col].apply(lambda x: _parse_float(x, 0, 100))
+        if not out["Neutral"].dropna().empty and out["Neutral"].dropna().max() <= 1.0:
+            out["Neutral"] = (out["Neutral"] * 100.0).round(2)
+    else:
+        out["Neutral"] = np.nan
+
+    out = (
+        out.dropna(subset=["Date", "Bearish"])
+        .drop_duplicates(subset=["Date"], keep="last")
+        .sort_values("Date")
+        .reset_index(drop=True)
+    )
+    return out
 
 
 def fetch_aaii_data():
@@ -298,7 +341,17 @@ def fetch_aaii_data():
         except Exception as e:
             print("[Warn] AAII HTML:", str(e))
 
-    backup_frames = []
+    frames = []
+    if os.path.exists(AAII_HISTORY_CSV_PATH):
+        try:
+            local_df = pd.read_csv(AAII_HISTORY_CSV_PATH)
+            norm_local = _normalize_aaii_df(local_df)
+            if not norm_local.empty:
+                frames.append(norm_local)
+                print("[Info] Loaded local AAII history rows:", len(norm_local))
+        except Exception as e:
+            print("[Warn] Local AAII history CSV:", str(e))
+
     backup_urls = [
         "https://raw.githubusercontent.com/datasets/aaii-sentiment/main/data/aaii-sentiment.csv",
         "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/aaii-sentiment.csv",
@@ -310,52 +363,29 @@ def fetch_aaii_data():
         if b_resp:
             try:
                 bdf = pd.read_csv(StringIO(b_resp.text)).dropna(how="all")
-                if not bdf.empty:
-                    date_col = bdf.columns[0]
-                    bdf["Date"] = pd.to_datetime(bdf[date_col], errors="coerce").dt.tz_localize(None).dt.normalize()
-                    b_col = "Bearish" if "Bearish" in bdf.columns else bdf.columns[3]
-                    bdf["AAII_Bearish"] = bdf[b_col].apply(lambda x: _parse_float(x, 0, 100))
-                    # 若資料是 0~1 小數自動轉為百分比
-                    if bdf["AAII_Bearish"].dropna().max() <= 1.0:
-                        bdf["AAII_Bearish"] = (bdf["AAII_Bearish"] * 100.0).round(2)
-
-                    clean_b = bdf.dropna(subset=["Date", "AAII_Bearish"])[["Date", "AAII_Bearish"]]
-                    if not clean_b.empty:
-                        backup_frames.append(clean_b)
-                        last = bdf.dropna(subset=["Date", "AAII_Bearish"]).sort_values("Date").iloc[-1]
-                        bull_raw = _parse_float(
-                            last.get("Bullish", last.iloc[1] if len(last) > 1 else None), 0, 100
-                        )
-                        neut_raw = _parse_float(
-                            last.get("Neutral", last.iloc[2] if len(last) > 2 else None), 0, 100
-                        )
-                        bear_val = float(last["AAII_Bearish"])
-                        if bull_raw is not None and bull_raw <= 1.0:
-                            bull_raw = round(bull_raw * 100.0, 2)
-                        if neut_raw is not None and neut_raw <= 1.0:
-                            neut_raw = round(neut_raw * 100.0, 2)
-                        if bull_raw is not None:
-                            if neut_raw is None:
-                                neut_raw = round(max(0.0, 100.0 - bull_raw - bear_val), 2)
-                            latest_from_backup = {
-                                "date": str(last["Date"].strftime("%Y-%m-%d")),
-                                "bullish": bull_raw,
-                                "neutral": neut_raw,
-                                "bearish": bear_val,
-                                "spread": round(bull_raw - bear_val, 2),
-                            }
+                norm_b = _normalize_aaii_df(bdf)
+                if not norm_b.empty:
+                    frames.append(norm_b)
+                    last = norm_b.iloc[-1]
+                    bull_val = float(last["Bullish"]) if pd.notna(last["Bullish"]) else 37.5
+                    neut_val = float(last["Neutral"]) if pd.notna(last["Neutral"]) else round(max(0.0, 100.0 - bull_val - float(last["Bearish"])), 2)
+                    bear_val = float(last["Bearish"])
+                    latest_from_backup = {
+                        "date": str(last["Date"].strftime("%Y-%m-%d")),
+                        "bullish": round(bull_val, 2),
+                        "neutral": round(neut_val, 2),
+                        "bearish": round(bear_val, 2),
+                        "spread": round(bull_val - bear_val, 2),
+                    }
             except Exception as e:
                 print("[Warn] AAII backup:", str(e))
-
-    all_series = []
-    if backup_frames:
-        all_series.extend(backup_frames)
 
     latest_obj = None
     if hist_records:
         first_rec = hist_records[0]
+        dt_iso = first_rec["Date"].strftime("%Y-%m-%d") if pd.notna(first_rec["Date"]) else first_rec["date_str"]
         latest_obj = {
-            "date": first_rec["date_str"],
+            "date": dt_iso,
             "bullish": first_rec["bullish"],
             "neutral": first_rec["neutral"],
             "bearish": first_rec["bearish"],
@@ -363,22 +393,47 @@ def fetch_aaii_data():
         }
         df_web = pd.DataFrame(hist_records).dropna(subset=["Date"])
         if not df_web.empty:
-            all_series.append(
-                df_web[["Date", "bearish"]].rename(columns={"bearish": "AAII_Bearish"})
-            )
+            web_norm = pd.DataFrame({
+                "Date": df_web["Date"],
+                "Bullish": df_web["bullish"],
+                "Neutral": df_web["neutral"],
+                "Bearish": df_web["bearish"],
+            })
+            frames.append(_normalize_aaii_df(web_norm))
 
     if latest_obj is None:
         latest_obj = latest_from_backup
 
-    if all_series:
-        merged_aaii = (
-            pd.concat(all_series, ignore_index=True)
-            .dropna(subset=["Date", "AAII_Bearish"])
-            .drop_duplicates(subset=["Date"], keep="last")
+    if latest_obj is not None:
+        parsed_latest_dt = _parse_aaii_date(latest_obj.get("date"))
+        if pd.notna(parsed_latest_dt):
+            frames.append(
+                pd.DataFrame([{
+                    "Date": parsed_latest_dt,
+                    "Bullish": latest_obj.get("bullish"),
+                    "Neutral": latest_obj.get("neutral"),
+                    "Bearish": latest_obj.get("bearish"),
+                }])
+            )
+
+    if frames:
+        merged_all = (
+            pd.concat(frames, ignore_index=True)
+            .dropna(subset=["Date", "Bearish"])
             .sort_values("Date")
-            .set_index("Date")
         )
-        return latest_obj, merged_aaii[["AAII_Bearish"]]
+        merged_all = merged_all.groupby("Date", as_index=False).agg({
+            "Bullish": "last",
+            "Neutral": "last",
+            "Bearish": "last",
+        })
+        # 將最新一週 AAII 寫回 data/aaii_history.csv，方便每週自動累積
+        save_df = merged_all.copy()
+        save_df["Date"] = save_df["Date"].dt.strftime("%Y-%m-%d")
+        save_df.to_csv(AAII_HISTORY_CSV_PATH, index=False, encoding="utf-8-sig")
+
+        aaii_series = merged_all.set_index("Date")[["Bearish"]].rename(columns={"Bearish": "AAII_Bearish"})
+        return latest_obj, aaii_series
 
     return latest_obj, pd.DataFrame(columns=["AAII_Bearish"])
 
@@ -405,7 +460,6 @@ def compute_multi_horizon_winrates(cnn_now, vix_now, aaii_now, df_cnn, df_mkt, d
         df["CNN_FG"] = cnn_now
 
     if df_aaii_hist is not None and not df_aaii_hist.empty:
-        # 將每週 AAII 對齊到交易日曆並向後填補至下次週報更新
         combined_idx = df.index.union(df_aaii_hist.index).sort_values()
         s_aaii = df_aaii_hist["AAII_Bearish"].reindex(combined_idx).ffill().bfill()
         df["AAII_Bearish"] = s_aaii.reindex(df.index).fillna(aaii_now["bearish"])
